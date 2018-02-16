@@ -97,3 +97,4 @@ index e015f0755e..92879f19c1 100644
 +  ADDON::LEAddonHook(addon, ADDON::LE_ADDON_ENABLED);
  
    CServiceBroker::GetEventLog().Add(EventPtr(new CAddonManagementEvent(addon, 24064)));
+ 
