@@ -82,19 +82,18 @@ diff --git a/xbmc/addons/AddonManager.cpp b/xbmc/addons/AddonManager.cpp
 index e015f0755e..92879f19c1 100644
 --- a/xbmc/addons/AddonManager.cpp
 +++ b/xbmc/addons/AddonManager.cpp
-@@ -836,6 +836,7 @@ bool CAddonMgr::DisableAddon(const std::string& id)
+@@ -836,6 +836,7 @@ bool CAddonMgr::DisableAddon(const std::
    AddonPtr addon;
    if (GetAddon(id, addon, ADDON_UNKNOWN, false) && addon != NULL)
    {
 +    ADDON::LEAddonHook(addon, ADDON::LE_ADDON_DISABLED);
-     CEventLog::GetInstance().Add(EventPtr(new CAddonManagementEvent(addon, 24141)));
+     CServiceBroker::GetEventLog().Add(EventPtr(new CAddonManagementEvent(addon, 24141)));
    }
  
-@@ -864,6 +865,7 @@ bool CAddonMgr::EnableSingle(const std::string& id)
+@@ -864,6 +865,7 @@ bool CAddonMgr::EnableSingle(const std::
    if (!m_database.DisableAddon(id, false))
      return false;
    m_disabled.erase(id);
 +  ADDON::LEAddonHook(addon, ADDON::LE_ADDON_ENABLED);
  
-   CEventLog::GetInstance().Add(EventPtr(new CAddonManagementEvent(addon, 24064)));
- 
+   CServiceBroker::GetEventLog().Add(EventPtr(new CAddonManagementEvent(addon, 24064)));
