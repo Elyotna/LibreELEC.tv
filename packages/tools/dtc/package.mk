@@ -31,7 +31,12 @@ PKG_SHORTDESC="The Device Tree Compiler"
 PKG_LONGDESC="The Device Tree Compiler"
 
 PKG_MAKE_OPTS_HOST="dtc libfdt"
-PKG_MAKE_OPTS_TARGET="dtc libfdt"
+
+if [ "$PROJECT" = "Amlogic_GX" -o "$PROJECT" = "Amlogic" ]; then
+  PKG_MAKE_OPTS_TARGET="dtc fdtdump fdtget fdtoverlay fdtput libfdt"
+else
+  PKG_MAKE_OPTS_TARGET="dtc libfdt"
+fi
 
 makeinstall_host() {
   mkdir -p $TOOLCHAIN/bin
@@ -46,7 +51,21 @@ post_makeinstall_host() {
   touch $TOOLCHAIN/lib/$PKG_PYTHON_VERSION/site-packages/pylibfdt/__init__.py
 }
 
+pre_make_target() {
+  make clean
+}
+
 makeinstall_target() {
   mkdir -p $INSTALL/usr/bin
     cp -P $PKG_BUILD/dtc $INSTALL/usr/bin
+
+  if [ "$PROJECT" = "Amlogic" ]; then
+    cp -P $PKG_BUILD/fdtdump $INSTALL/usr/bin/
+    cp -P $PKG_BUILD/fdtget $INSTALL/usr/bin/
+    cp -P $PKG_BUILD/fdtoverlay $INSTALL/usr/bin/
+    cp -P $PKG_BUILD/fdtput $INSTALL/usr/bin/
+
+  mkdir -p $INSTALL/usr/lib
+    cp -P $PKG_BUILD/libfdt/libfdt.so $INSTALL/usr/lib/
+  fi
 }
