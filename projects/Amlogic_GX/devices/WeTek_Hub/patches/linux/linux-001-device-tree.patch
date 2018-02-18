@@ -1,0 +1,23 @@
+--- a/arch/arm64/boot/dts/amlogic/meson-gxbb-p20x.dtsi	2018-02-16 19:14:45.663737518 +0000
++++ b/arch/arm64/boot/dts/amlogic/meson-gxbb-p20x.dtsi	2018-02-16 19:19:06.861055395 +0000
+@@ -47,6 +47,9 @@
+ / {
+ 	aliases {
+ 		serial0 = &uart_AO;
++		ethernet0 = &ethmac;
++		mmc0 = &sd_emmc_b;
++		mmc1 = &sd_emmc_c;
+ 	};
+ 
+ 	chosen {
+--- a/arch/arm64/boot/dts/amlogic/meson-gxbb-p20x.dtsi	2018-02-17 15:09:12.792704678 +0000
++++ b/arch/arm64/boot/dts/amlogic/meson-gxbb-p20x.dtsi	2018-02-18 02:30:08.640144586 +0000
+@@ -266,9 +266,6 @@
+ 
+ 	bus-width = <4>;
+ 	cap-sd-highspeed;
+-	sd-uhs-sdr12;
+-	sd-uhs-sdr25;
+-	sd-uhs-sdr50;
+ 	max-frequency = <100000000>;
+ 	disable-wp;
