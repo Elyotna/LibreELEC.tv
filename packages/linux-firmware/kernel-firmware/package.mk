@@ -34,9 +34,13 @@ PKG_TOOLCHAIN="manual"
 makeinstall_target() {
   FW_TARGET_DIR=$INSTALL/$(get_full_firmware_dir)
 
-  FW_LISTS="${PKG_DIR}/firmwares/any.dat ${PKG_DIR}/firmwares/${TARGET_ARCH}.dat"
-  FW_LISTS+=" ${PROJECT_DIR}/${PROJECT}/${PKG_NAME}/firmwares/any.dat"
-  [ -n "${DEVICE}" ] && FW_LISTS+=" ${PROJECT_DIR}/${PROJECT}/devices/${DEVICE}/${PKG_NAME}/firmwares/any.dat"
+  if [ -f ${PROJECT_DIR}/${PROJECT}/devices/${DEVICE}/firmware/kernel-firmware.dat ]; then
+    FW_LISTS="${PROJECT_DIR}/${PROJECT}/devices/${DEVICE}/firmware/kernel-firmware.dat"
+  elif [ -f ${PROJECT_DIR}/${PROJECT}/firmware/kernel-firmware.dat ]; then
+    FW_LISTS="${PROJECT_DIR}/${PROJECT}/firmware/kernel-firmware.dat"
+  else
+    FW_LISTS="${PKG_DIR}/firmwares/any.dat ${PKG_DIR}/firmwares/${TARGET_ARCH}.dat"
+  fi
 
   for fwlist in ${FW_LISTS}; do
     [ -f ${fwlist} ] || continue
