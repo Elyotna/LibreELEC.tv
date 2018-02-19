@@ -59,7 +59,7 @@ makeinstall_target() {
   mkdir -p $INSTALL/usr/bin
     cp -P $PKG_BUILD/dtc $INSTALL/usr/bin
 
-  if [ "$PROJECT" = "Amlogic" ]; then
+  if [ "$PROJECT" = "Amlogic_GX" -o "$PROJECT" = "Amlogic" ]; then
     cp -P $PKG_BUILD/fdtdump $INSTALL/usr/bin/
     cp -P $PKG_BUILD/fdtget $INSTALL/usr/bin/
     cp -P $PKG_BUILD/fdtoverlay $INSTALL/usr/bin/
