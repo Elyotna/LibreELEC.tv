@@ -1,10 +1,9 @@
 --- a/arch/arm64/boot/dts/amlogic/meson-gxbb-p20x.dtsi	2018-02-16 19:14:45.663737518 +0000
 +++ b/arch/arm64/boot/dts/amlogic/meson-gxbb-p20x.dtsi	2018-02-16 19:19:06.861055395 +0000
-@@ -47,6 +47,9 @@
+@@ -47,6 +47,8 @@
  / {
  	aliases {
  		serial0 = &uart_AO;
-+		ethernet0 = &ethmac;
 +		mmc0 = &sd_emmc_b;
 +		mmc1 = &sd_emmc_c;
  	};
@@ -21,3 +20,17 @@
 -	sd-uhs-sdr50;
  	max-frequency = <100000000>;
  	disable-wp;
+
+--- a/arch/arm64/boot/dts/amlogic/meson-gxbb-wetek-hub.dts	2018-01-23 18:58:21.000000000 +0000
++++ b/arch/arm64/boot/dts/amlogic/meson-gxbb-wetek-hub.dts	2018-02-18 06:21:15.697963333 +0000
+@@ -49,6 +49,10 @@
+ 	compatible = "wetek,hub", "amlogic,meson-gxbb";
+ 	model = "WeTek Hub";
+ 
++	aliases {
++		ethernet0 = &ethmac;
++	};
++
+ 	leds {
+ 		compatible = "gpio-leds";
+ 
