@@ -55,7 +55,7 @@ if [ "$1" = "cpu" -o "$TEMP" = "0" ]; then
   for hwmon in /sys/class/hwmon/*; do
     if [ -f "${hwmon}/name" ]; then
       case $(cat ${hwmon}/name) in
-        coretemp|k10temp)
+        coretemp|k10temp|scpi_sensors)
           [[ -f "${hwmon}/temp1_input" ]] && TEMP="$(cat ${hwmon}/temp1_input)" && break
           [[ -f "${hwmon}/temp2_input" ]] && TEMP="$(cat ${hwmon}/temp2_input)" && break
           ;;
@@ -67,7 +67,7 @@ if [ "$1" = "cpu" -o "$TEMP" = "0" ]; then
     TEMP="$(cat /sys/class/hwmon/hwmon0/device/temp1_input)"
   fi
 
-  # used on RaspberryPi and amlogic
+  # used on RaspberryPi and 3.14 kernel amlogic
   if [ "$TEMP" = "0" -a -f /sys/class/thermal/thermal_zone0/temp ]; then
     TEMP="$(cat /sys/class/thermal/thermal_zone0/temp)"
   fi
