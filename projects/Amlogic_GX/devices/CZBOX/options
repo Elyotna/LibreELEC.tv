@@ -7,6 +7,10 @@
   # Kernel extra targets to build
     KERNEL_UBOOT_EXTRA_TARGET="amlogic/meson-gxl-s905d-p231.dtb"
 
+  # Kernel to use. values can be:
+  # default:  default mainline kernel
+    LINUX="amlogic-4.16"
+
   # Build Android kernel image using mkbootimg
     BUILD_ANDROID_BOOTIMG="yes"
 
