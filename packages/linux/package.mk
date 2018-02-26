@@ -47,9 +47,9 @@ case "$LINUX" in
     PKG_DEPENDS_TARGET="$PKG_DEPENDS_TARGET aml-dtbtools:host"
     ;;
   *)
-    PKG_VERSION="91ab883" #4.16-rc1
-    PKG_SHA256="8af4006b976e4cd15ce8e4ad396c8e8daab55fe0900a1d7c3806d1ff70a83e1a"
-    PKG_URL="https://github.com/torvalds/linux/archive/$PKG_VERSION.tar.gz"
+    PKG_VERSION="4.14.20"
+    PKG_SHA256="4ab7f42aa6af9c1e3b00cba6b1fa305a87407666aaa2fae555f7fbdaafb6d292"
+    PKG_URL="https://www.kernel.org/pub/linux/kernel/v4.x/$PKG_NAME-$PKG_VERSION.tar.xz"
     PKG_PATCH_DIRS="default"
     ;;
 esac
@@ -59,11 +59,8 @@ PKG_KERNEL_CFG_FILE=$(kernel_config_path)
 if [ "$TARGET_KERNEL_ARCH" = "arm64" -a "$TARGET_ARCH" = "arm" ]; then
   PKG_DEPENDS_HOST="$PKG_DEPENDS_HOST gcc-linaro-aarch64-linux-gnu:host"
   PKG_DEPENDS_TARGET="$PKG_DEPENDS_TARGET gcc-linaro-aarch64-linux-gnu:host"
-  PKG_TARGET_PREFIX=$TOOLCHAIN/lib/gcc-linaro-aarch64-linux-gnu/bin/aarch64-linux-gnu-
   HEADERS_ARCH=$TARGET_ARCH
   PKG_BUILD_PERF="no"
-else
-  PKG_TARGET_PREFIX=$TARGET_PREFIX
 fi
 
 if [ "$DEVTOOLS" = "yes" -a "$PKG_BUILD_PERF" != "no" ] && grep -q ^CONFIG_PERF_EVENTS= $PKG_KERNEL_CFG_FILE ; then
@@ -85,7 +82,7 @@ post_patch() {
   sed -i -e "s|^HOSTCC[[:space:]]*=.*$|HOSTCC = $TOOLCHAIN/bin/host-gcc|" \
          -e "s|^HOSTCXX[[:space:]]*=.*$|HOSTCXX = $TOOLCHAIN/bin/host-g++|" \
          -e "s|^ARCH[[:space:]]*?=.*$|ARCH = $TARGET_KERNEL_ARCH|" \
-         -e "s|^CROSS_COMPILE[[:space:]]*?=.*$|CROSS_COMPILE = $PKG_TARGET_PREFIX|" \
+         -e "s|^CROSS_COMPILE[[:space:]]*?=.*$|CROSS_COMPILE = $TARGET_KERNEL_PREFIX|" \
          $PKG_BUILD/Makefile
 
   cp $PKG_KERNEL_CFG_FILE $PKG_BUILD/.config
@@ -166,6 +163,20 @@ make_target() {
 
   if [ "$PKG_BUILD_PERF" = "yes" ] ; then
     ( cd tools/perf
+
+      # arch specific perf build args
+      case "$TARGET_ARCH" in
+        x86_64)
+          PERF_BUILD_ARGS="ARCH=x86"
+          ;;
+        aarch64)
+          PERF_BUILD_ARGS="ARCH=arm64"
+          ;;
+        *)
+          PERF_BUILD_ARGS="ARCH=$TARGET_ARCH"
+          ;;
+      esac
+
       WERROR=0 \
       NO_LIBPERL=1 \
       NO_LIBPYTHON=1 \
@@ -175,9 +186,11 @@ make_target() {
       NO_LIBAUDIT=1 \
       NO_LZMA=1 \
       NO_SDT=1 \
-      LDFLAGS="-ldw -ldwfl -lebl -lelf -ldl -lz" \
+      LDFLAGS="$LDFLAGS -ldw -ldwfl -lebl -lelf -ldl -lz" \
       EXTRA_PERFLIBS="-lebl" \
-        make
+      CROSS_COMPILE="$TARGET_PREFIX" \
+      JOBS="$CONCURRENCY_MAKE_LEVEL" \
+        make $PERF_BUILD_ARGS
       mkdir -p $INSTALL/usr/bin
         cp perf $INSTALL/usr/bin
     )
