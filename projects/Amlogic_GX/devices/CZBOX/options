@@ -5,7 +5,7 @@
     UBOOT_VERSION="vendor"
 
   # Kernel extra targets to build
-    KERNEL_UBOOT_EXTRA_TARGET="amlogic/meson-gxl-s905d-p231.dtb"
+    KERNEL_UBOOT_EXTRA_TARGET="amlogic/meson-gxl-s905d-sml5442tw.dtb"
 
   # Kernel to use. values can be:
   # default:  default mainline kernel
@@ -23,15 +23,15 @@
   # additional packages to install:
   # Space separated list is supported,
   # e.g. ADDITIONAL_PACKAGES="PACKAGE1 PACKAGE2"
-    ADDITIONAL_PACKAGES="u-boot-tools-aml"
+    ADDITIONAL_PACKAGES="u-boot-tools-aml dtc"
 
   # additional drivers to install:
   # for a list of additinoal drivers see packages/linux-drivers
   # Space separated list is supported,
   # e.g. ADDITIONAL_DRIVERS="DRIVER1 DRIVER2"
-#    ADDITIONAL_DRIVERS="$ADDITIONAL_DRIVERS brcmap6xxx-aml"
+#    ADDITIONAL_DRIVERS="$ADDITIONAL_DRIVERS xxx"
 
   # additional Firmware to use (dvb-firmware, misc-firmware, wlan-firmware)
   # Space separated list is supported,
   # e.g. FIRMWARE="dvb-firmware misc-firmware wlan-firmware"
-    FIRMWARE="ath10k-firmware"
+    FIRMWARE="ath10k-firmware qca-firmware"
