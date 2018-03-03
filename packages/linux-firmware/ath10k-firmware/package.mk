@@ -17,8 +17,8 @@
 ################################################################################
 
 PKG_NAME="ath10k-firmware"
-PKG_VERSION="76560d3"
-PKG_SHA256="c2187c49906819f0d537f47229d9d989c3c0dc505d52dd07cc2f8695a05f6e24"
+PKG_VERSION="1ac853f"
+PKG_SHA256="f316f691b5db45f92d05b49380153150befc2e5d11ae2e4fe24d16552bee56b5"
 PKG_ARCH="any"
 PKG_LICENSE="other"
 PKG_SITE="https://github.com/chewitt/ath10k-firmware"
