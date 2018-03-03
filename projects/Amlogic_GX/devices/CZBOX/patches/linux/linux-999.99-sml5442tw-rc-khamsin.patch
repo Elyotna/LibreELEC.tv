@@ -1,0 +1,107 @@
+--- a/include/media/rc-map.h	2018-02-25 20:28:19.000000000 +0000
++++ b/include/media/rc-map.h	2018-02-28 09:41:36.306154754 +0000
+@@ -215,6 +215,7 @@ struct rc_map *rc_map_get(const char *na
+ #define RC_MAP_IT913X_V1                 "rc-it913x-v1"
+ #define RC_MAP_IT913X_V2                 "rc-it913x-v2"
+ #define RC_MAP_KAIOMY                    "rc-kaiomy"
++#define RC_MAP_KHAMSIN                   "rc-khamsin"
+ #define RC_MAP_KWORLD_315U               "rc-kworld-315u"
+ #define RC_MAP_KWORLD_PC150U             "rc-kworld-pc150u"
+ #define RC_MAP_KWORLD_PLUS_TV_ANALOG     "rc-kworld-plus-tv-analog"
+--- a/drivers/media/rc/keymaps/Makefile 2018-02-25 20:28:19.000000000 +0000
++++ b/drivers/media/rc/keymaps/Makefile 2018-02-28 09:38:31.610200324 +0000
+@@ -57,6 +57,7 @@ obj-$(CONFIG_RC_MAP) += rc-adstech-dvb-t
+ 			rc-it913x-v1.o \
+ 			rc-it913x-v2.o \
+ 			rc-kaiomy.o \
++                        rc-khamsin.o \
+ 			rc-kworld-315u.o \
+ 			rc-kworld-pc150u.o \
+ 			rc-kworld-plus-tv-analog.o \
+--- a/dev/null	2018-01-28 02:27:51.883409616 +0000
++++ b/drivers/media/rc/keymaps/rc-khamsin.c	2018-01-28 02:27:51.883409616 +0000
+@@ -0,0 +1,84 @@
++/* rc-khamsin.c - Keytable for KHAMSIN remote
++ *
++ * Copyright (c) 2018 - Christian Hewitt <chewitt@libreelec.tv>
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ */
++
++#include <media/rc-map.h>
++#include <linux/module.h>
++
++static struct rc_map_table khamsin[] = {
++
++	{ 0x40c, KEY_POWER },
++	{ 0x44a, KEY_INFO },
++	{ 0x461, KEY_FAVORITES },
++	{ 0x401, KEY_1 },
++	{ 0x402, KEY_2 },
++	{ 0x403, KEY_3 },
++	{ 0x404, KEY_4 },
++	{ 0x405, KEY_5 },
++	{ 0x406, KEY_6 },
++	{ 0x407, KEY_7 },
++	{ 0x408, KEY_8 },
++	{ 0x409, KEY_9 },
++	{ 0x448, KEY_ZOOM },
++	{ 0x400, KEY_0 },
++	{ 0x441, KEY_EPG },
++	{ 0x412, KEY_CONTEXT_MENU },
++	{ 0x437, KEY_RECORD },
++	{ 0x430, KEY_PAUSE },
++	{ 0x41d, KEY_ZOOM },
++	{ 0x424, KEY_OK },
++	{ 0x410, KEY_UP },
++	{ 0x411, KEY_DOWN },
++	{ 0x415, KEY_LEFT },
++	{ 0x416, KEY_RIGHT },
++	{ 0x414, KEY_VOLUMEUP },
++	{ 0x417, KEY_VOLUMEDOWN },
++	{ 0x41f, KEY_BACK },
++	{ 0x40d, KEY_MUTE },
++	{ 0x40e, KEY_CHANNELUP },
++	{ 0x40a, KEY_CHANNELDOWN },
++	{ 0x432, KEY_REWIND },
++	{ 0x435, KEY_PLAYPAUSE },
++	{ 0x436, KEY_STOP },
++	{ 0x434, KEY_FORWARD },
++	{ 0x451, KEY_PREVIOUSSONG },
++	{ 0x43c, KEY_SUBTITLE },
++	{ 0x40f, KEY_LANGUAGE },
++	{ 0x450, KEY_NEXTSONG },
++	{ 0x46b, KEY_RED },
++	{ 0x46c, KEY_GREEN },
++	{ 0x46d, KEY_YELLOW },
++	{ 0x46e, KEY_BLUE },
++
++};
++
++static struct rc_map_list khamsin_map = {
++	.map = {
++		.scan     = khamsin,
++		.size     = ARRAY_SIZE(khamsin),
++		.rc_proto = RC_PROTO_RC5,
++		.name     = RC_MAP_KHAMSIN,
++	}
++};
++
++static int __init init_rc_map_khamsin(void)
++{
++	return rc_map_register(&khamsin_map);
++}
++
++static void __exit exit_rc_map_khamsin(void)
++{
++	rc_map_unregister(&khamsin_map);
++}
++
++module_init(init_rc_map_khamsin)
++module_exit(exit_rc_map_khamsin)
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("Christian Hewitt <chewitt@libreelec.tv>");

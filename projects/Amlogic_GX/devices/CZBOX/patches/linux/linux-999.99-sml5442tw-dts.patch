@@ -1,0 +1,104 @@
+--- a/Documentation/devicetree/bindings/vendor-prefixes.txt	2018-02-25 20:28:19.000000000 +0000
++++ b/Documentation/devicetree/bindings/vendor-prefixes.txt	2018-02-28 08:11:23.776115186 +0000
+@@ -327,6 +327,7 @@ sirf	SiRF Technology, Inc.
+ sis	Silicon Integrated Systems Corp.
+ sitronix	Sitronix Technology Corporation
+ skyworks	Skyworks Solutions, Inc.
++sml	Smartlabs
+ smsc	Standard Microsystems Corporation
+ snps	Synopsys, Inc.
+ socionext	Socionext Inc.
+--- a/Documentation/devicetree/bindings/arm/amlogic.txt	2018-02-25 20:28:19.000000000 +0000
++++ b/Documentation/devicetree/bindings/arm/amlogic.txt	2018-02-28 08:03:51.438599476 +0000
+@@ -72,6 +72,7 @@ Board compatible values (alphabetically,
+ 
+   - "amlogic,p230" (Meson gxl s905d)
+   - "amlogic,p231" (Meson gxl s905d)
++  - "sml,sml5442tw" (Meson gxl s905d)
+ 
+   - "amlogic,q200" (Meson gxm s912)
+   - "amlogic,q201" (Meson gxm s912)
+--- a/arch/arm64/boot/dts/amlogic/Makefile	2018-02-28 07:59:53.653580927 +0000
++++ b/arch/arm64/boot/dts/amlogic/Makefile	2018-02-28 07:59:46.729436723 +0000
+@@ -17,6 +17,7 @@ dtb-$(CONFIG_ARCH_MESON) += meson-gxl-s9
+ dtb-$(CONFIG_ARCH_MESON) += meson-gxl-s905x-p212.dtb
+ dtb-$(CONFIG_ARCH_MESON) += meson-gxl-s905d-p230.dtb
+ dtb-$(CONFIG_ARCH_MESON) += meson-gxl-s905d-p231.dtb
++dtb-$(CONFIG_ARCH_MESON) += meson-gxl-s905d-sml5442tw.dtb
+ dtb-$(CONFIG_ARCH_MESON) += meson-gxm-khadas-vim2.dtb
+ dtb-$(CONFIG_ARCH_MESON) += meson-gxm-nexbox-a1.dtb
+ dtb-$(CONFIG_ARCH_MESON) += meson-gxm-q200.dtb
+--- a/arch/arm64/boot/dts/amlogic/meson-gxl-s905d-sml5442tw.dts	2017-11-19 05:19:49.348632824 +0000
++++ b/arch/arm64/boot/dts/amlogic/meson-gxl-s905d-sml5442tw.dts	2018-02-28 07:54:07.542391152 +0000
+@@ -0,0 +1,71 @@
++/*
++ * Copyright (c) 2018 Christian Hewitt <chewitt@libreelec.tv>
++ *
++ * SPDX-License-Identifier: (GPL-2.0+)
++ */
++
++/dts-v1/;
++
++#include "meson-gxl-s905d.dtsi"
++#include "meson-gx-p23x-q20x.dtsi"
++
++/ {
++	compatible = "sml,sml5442tw", "amlogic,s905d", "amlogic,meson-gxl";
++	model = "Smartlabs SML-5442TW";
++
++	aliases {
++		serial1 = &uart_A;
++	};
++
++	leds {
++		compatible = "gpio-leds";
++
++		yellow {
++			label = "sml5442tw:yellow";
++			gpios = <&gpio_ao GPIOAO_6 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++
++		blue {
++			label = "sml5442tw:blue";
++			gpios = <&gpio GPIODV_28 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++
++		green {
++			label = "sml5442tw:green";
++			gpios = <&gpio_ao GPIOAO_9 GPIO_ACTIVE_HIGH>;
++			default-state = "on";
++		};
++
++		red {
++			label = "sml5442tw:red";
++			gpios = <&gpio GPIODV_27 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++	};
++};
++
++&ir {
++	linux,rc-map-name = "rc-khamsin";
++};
++
++&ethmac {
++	phy-mode = "rmii";
++	phy-handle = <&internal_phy>;
++};
++
++&gpio {
++	bt-en {
++		gpio-hog;
++		gpios = <GPIOX_17 GPIO_ACTIVE_HIGH>;
++		output-high;
++		line-name = "bt-en";
++	};
++};
++
++&uart_A {
++        status = "okay";
++        pinctrl-0 = <&uart_a_pins>, <&uart_a_cts_rts_pins>;
++        pinctrl-names = "default";
++};
