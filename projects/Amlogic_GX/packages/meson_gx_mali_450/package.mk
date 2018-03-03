@@ -37,7 +37,7 @@ pre_make_target() {
 }
 
 make_target() {
-  make ARCH=$TARGET_KERNEL_ARCH CROSS_COMPILE=$TARGET_PREFIX KDIR=$(kernel_path) USING_UMP=0 BUILD=release MALI_DMA_BUF_MAP_ON_ATTACH=1 USING_PROFILING=0 MALI_PLATFORM=meson USING_DVFS=0 -C driver/src/devicedrv/mali
+  make ARCH=$TARGET_KERNEL_ARCH CROSS_COMPILE=$TARGET_KERNEL_PREFIX KDIR=$(kernel_path) USING_UMP=0 BUILD=release MALI_DMA_BUF_MAP_ON_ATTACH=1 USING_PROFILING=0 MALI_PLATFORM=meson USING_DVFS=0 -C driver/src/devicedrv/mali
 }
 
 makeinstall_target() {
