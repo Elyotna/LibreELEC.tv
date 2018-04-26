@@ -1,0 +1,36 @@
+diff --git a/arch/arm64/boot/dts/amlogic/meson-gx.dtsi b/arch/arm64/boot/dts/amlogic/meson-gx.dtsi
+index b003f324ca31..b8dc4dbb391b 100644
+--- a/arch/arm64/boot/dts/amlogic/meson-gx.dtsi
++++ b/arch/arm64/boot/dts/amlogic/meson-gx.dtsi
+@@ -35,6 +35,12 @@ 
+ 			no-map;
+ 		};
+ 
++		/* Alternate 3 MiB reserved for ARM Trusted Firmware (BL31) */
++		secmon_reserved_alt: secmon@5000000 {
++			reg = <0x0 0x05000000 0x0 0x300000>;
++			no-map;
++		};
++
+ 		linux,cma {
+ 			compatible = "shared-dma-pool";
+ 			reusable;
+diff --git a/arch/arm64/boot/dts/amlogic/meson-gxl.dtsi b/arch/arm64/boot/dts/amlogic/meson-gxl.dtsi
+index 27538eea547b..c87a80e9bcc6 100644
+--- a/arch/arm64/boot/dts/amlogic/meson-gxl.dtsi
++++ b/arch/arm64/boot/dts/amlogic/meson-gxl.dtsi
+@@ -13,14 +13,6 @@ 
+ / {
+ 	compatible = "amlogic,meson-gxl";
+ 
+-	reserved-memory {
+-		/* Alternate 3 MiB reserved for ARM Trusted Firmware (BL31) */
+-		secmon_reserved_alt: secmon@5000000 {
+-			reg = <0x0 0x05000000 0x0 0x300000>;
+-			no-map;
+-		};
+-	};
+-
+ 	soc {
+ 		usb0: usb@c9000000 {
+ 			status = "disabled";
