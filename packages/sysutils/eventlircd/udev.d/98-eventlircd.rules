@@ -87,6 +87,11 @@ SUBSYSTEMS=="input", ATTRS{name}=="小米蓝牙遥控器", \
   ENV{eventlircd_enable}="true", \
   ENV{eventlircd_evmap}="xiaomibtremoteAM.evmap"
 
+# SML5442TW BT remote
+ATTRS{name}=="KHAMSIN O2", \
+  ENV{eventlircd_enable}="true", \
+  ENV{eventlircd_evmap}="default.evmap"
+
 #-------------------------------------------------------------------------------
 # Ask eventlircd to handle USB HID devices that show up as event devices and are
 # known to be remote controls. For simplicity, the event map file names have the
