@@ -49,8 +49,8 @@ case "$LINUX" in
     PKG_BUILD_PERF="no"
     ;;
   amlogic-mainline)
-    PKG_VERSION="11454943b264b548e714d8edf932ebf306e5f808" # 4.16.1
-    PKG_SHA256="f56bfeeffb56df161abcaac22bedee278831472a5f9d8e877d1dd840d735d080"
+    PKG_VERSION="b04e217704b7f879c6b91222b066983a44a7a09f" # 4.17-rc7
+    PKG_SHA256="057c51c2c3aae85f0687c2735fcb9b7329e64b7e929d7af67226a86810b0593d"
     PKG_URL="https://github.com/torvalds/linux/archive/$PKG_VERSION.tar.gz"
     PKG_SOURCE_DIR="$PKG_NAME-$PKG_VERSION*"
     PKG_PATCH_DIRS="default"
