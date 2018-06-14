@@ -1,0 +1,111 @@
+#!/bin/bash
+
+if [ -f  .git/config ]; then
+  DIR="/home/chewitt/LibreELEC.chewitt"
+else
+  echo "not in git root folder, exiting.."
+  exit 1
+fi
+
+do_overlay(){
+  # DRM OVERLAY PATCHES
+  rm projects/Amlogic_GX/patches/linux/a-* 2&>/dev/null
+  cd ~/linux.narmstrong
+  rm *.patch 2&>/dev/null
+  git checkout amlogic/v4.18/drm-overlay
+  git format-patch --start-number 0001 60cc43fc888428bb2f18f08997432d426a243338
+  for filename in *.patch; do mv "$filename" "a-$filename"; done;
+  mv *.patch $DIR/projects/Amlogic_GX/patches/linux/
+}
+
+do_upstream(){
+  # LINUX PATCHES
+  rm projects/Amlogic_GX/patches/linux/b-* 2&>/dev/null
+  cd ~/linux.narmstrong
+  rm *.patch 2&>/dev/null
+  git checkout linux-4.17-le-amlogic-gx
+  git format-patch --start-number 0001 29dcea88779c856c7dc92040a0c01233263101d4
+  for filename in *.patch; do mv "$filename" "b-$filename"; done;
+  mv *.patch $DIR/projects/Amlogic_GX/patches/linux/
+}
+
+do_elyotna(){
+  # V4L2 MEM2MEM VDEC PATCHES
+  rm projects/Amlogic_GX/patches/linux/c-* 2&>/dev/null
+  cd ~/linux.elyotna
+  rm *.patch 2&>/dev/null
+  git checkout 4.17/amlogic-v4l2-m2m
+  git fetch origin 4.17/amlogic-v4l2-m2m
+  git reset --hard origin/4.17/amlogic-v4l2-m2m
+  git format-patch --start-number 0001 29dcea88779c856c7dc92040a0c01233263101d4
+  for filename in *.patch; do mv "$filename" "c-$filename"; done;
+  mv *.patch $DIR/projects/Amlogic_GX/patches/linux/
+}
+
+do_kwiboo(){
+  # HDMI AUDIO PATCHES
+  rm projects/Amlogic_GX/patches/linux/d-* 2&>/dev/null
+  cd ~/linux.kwiboo
+  rm *.patch 2&>/dev/null
+  git checkout amlogic-4.16
+  git format-patch --start-number 0001 3a973b633fa190c9306f8370c7f7d95920268c1e
+  for filename in *.patch; do mv "$filename" "d-$filename"; done;
+  rm d-0001-fixup-ARM64-dts-meson-gx-add-audio-controller-nodes.patch
+  rm d-0003-HACK-ARM64-dts-meson-gxbb-wetek-play2-remove-hdmi-au.patch
+  rm d-0004-ARM64-dts-meson-gxbb-wetek-add-a-wetek-specific-dtsi.patch
+  mv *.patch $DIR/projects/Amlogic_GX/patches/linux/
+}
+
+do_erstrom(){
+  # ath10k PATCHES
+  rm projects/Amlogic_GX/patches/linux/e-* 2&>/dev/null
+  cd ~/linux.erstrom
+  rm *.patch 2&>/dev/null
+  git checkout master
+  git fetch origin master
+  git reset --hard origin/master
+  git format-patch --start-number 0001 69819beebe2a92f0e724affb9ac06f5ff696beef
+#  for filename in *.patch; do mv "$filename" "e-$filename"; done;
+#  mv *.patch $DIR/projects/Amlogic_GX/patches/linux/
+}
+
+do_lrusak(){
+  # KODI DRMPRIME GLES PATCHES
+  rm projects/Amlogic_GX/patches/kodi/*lrusak* 2&>/dev/null
+  cd ~/kodi.lrusak
+  rm *.patch 2&>/dev/null
+  git checkout drmprimegles-1img-nofallback
+  git format-patch --start-number 0001 c51ed0794284485694bff2f536b868feab624675
+  for filename in *.patch; do mv "$filename" "lrusak-$filename"; done;
+  mv *.patch $DIR/projects/Amlogic_GX/patches/kodi/
+}
+
+case $1 in
+  narmstrong)
+    do_narmstrong
+    ;;
+  upstream)
+    do_upstream
+    ;;
+  elyotna|ely)
+    do_elyotna
+    ;;
+  kwiboo)
+    do_kwiboo
+    ;;
+  erstrom|ath10k)
+    do_erstrom
+    ;;
+  lrusak)
+    do_lrusak
+    ;;
+  all|*)
+    do_narmstrong
+    do_upstream
+    do_elyotna
+    do_kwiboo
+esac
+
+cd $DIR
+
+exit
