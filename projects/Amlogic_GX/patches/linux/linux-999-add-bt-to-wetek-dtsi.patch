@@ -1,0 +1,35 @@
+From c447b98fc035db8e988ee40e3071a8d746db36a8 Mon Sep 17 00:00:00 2001
+From: chewitt <chewitt@libreelec.tv>
+Date: Sun, 1 Jul 2018 19:56:35 +0400
+Subject: [PATCH] add ttyAML1 for sdio BT uart
+
+---
+ arch/arm64/boot/dts/amlogic/meson-gxbb-wetek.dtsi | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/amlogic/meson-gxbb-wetek.dtsi b/arch/arm64/boot/dts/amlogic/meson-gxbb-wetek.dtsi
+index 70325b273bd2b..9476868f16591 100644
+--- a/arch/arm64/boot/dts/amlogic/meson-gxbb-wetek.dtsi
++++ b/arch/arm64/boot/dts/amlogic/meson-gxbb-wetek.dtsi
+@@ -10,6 +10,7 @@
+ / {
+ 	aliases {
+ 		serial0 = &uart_AO;
++		serial1 = &uart_A;
+ 		ethernet0 = &ethmac;
+ 	};
+ 
+@@ -239,6 +240,13 @@
+ 	vqmmc-supply = <&vddio_boot>;
+ };
+ 
++/* This is connected to the Bluetooth module: */
++&uart_A {
++	status = "okay";
++	pinctrl-0 = <&uart_a_pins>, <&uart_a_cts_rts_pins>;
++	pinctrl-names = "default";
++};
++
+ /* This UART is brought out to the DB9 connector */
+ &uart_AO {
+ 	status = "okay";
