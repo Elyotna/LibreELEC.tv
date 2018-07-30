@@ -1,0 +1,122 @@
+From e929ab436df329e15748dd6ba116002cfc0b0af2 Mon Sep 17 00:00:00 2001
+From: Maxime Jourdan <mjourdan@baylibre.com>
+Date: Sat, 25 Aug 2018 19:16:33 +0200
+Subject: [PATCH 32/35] Partially revert H.264 interlaced changes
+
+It's more complicated than initially thought.
+Interlaced bitstreams where there are 2 avpackets that translate into one frame
+will freeze and fail.
+Other interlaced bitstreams should be OK.
+---
+ drivers/media/platform/meson/vdec/codec_h264.c | 17 +++++------------
+ drivers/media/platform/meson/vdec/vdec.c       | 11 +----------
+ drivers/media/platform/meson/vdec/vdec.h       |  7 -------
+ 3 files changed, 6 insertions(+), 29 deletions(-)
+
+diff --git a/drivers/media/platform/meson/vdec/codec_h264.c b/drivers/media/platform/meson/vdec/codec_h264.c
+index 445a3fe..c82757f 100644
+--- a/drivers/media/platform/meson/vdec/codec_h264.c
++++ b/drivers/media/platform/meson/vdec/codec_h264.c
+@@ -6,7 +6,6 @@
+ #include <media/v4l2-mem2mem.h>
+ #include <media/videobuf2-dma-contig.h>
+ 
+-#include "codec_h264.h"
+ #include "codec_helpers.h"
+ #include "dos_regs.h"
+ 
+@@ -58,8 +57,6 @@ struct codec_h264 {
+ 	/* Buffer for parsed SEI data */
+ 	void      *sei_vaddr;
+ 	dma_addr_t sei_paddr;
+-
+-	u32 seq_info;
+ };
+ 
+ static int codec_h264_can_recycle(struct amvdec_core *core)
+@@ -194,7 +191,6 @@ static void codec_h264_set_param(struct amvdec_session *sess) {
+ 	amvdec_write_dos(core, AV_SCRATCH_9, 0);
+ 
+ 	parsed_info = amvdec_read_dos(core, AV_SCRATCH_1);
+-	h264->seq_info = amvdec_read_dos(core, AV_SCRATCH_2);
+ 
+ 	/* Total number of 16x16 macroblocks */
+ 	mb_total = (parsed_info >> 8) & 0xffff;
+@@ -246,7 +242,6 @@ static void codec_h264_set_param(struct amvdec_session *sess) {
+ static void codec_h264_frames_ready(struct amvdec_session *sess, u32 status)
+ {
+ 	struct amvdec_core *core = sess->core;
+-	struct codec_h264 *h264 = sess->priv;
+ 	int error_count;
+ 	int num_frames;
+ 	int i;
+@@ -260,7 +255,7 @@ static void codec_h264_frames_ready(struct amvdec_session *sess, u32 status)
+ 	}
+ 
+ 	for (i = 0; i < num_frames; i++) {
+-		u32 frame_status = amvdec_read_dos(core, AV_SCRATCH_1 + i*4);
++		u32 frame_status = amvdec_read_dos(core, AV_SCRATCH_1 + i * 4);
+ 		u32 buffer_index = frame_status & 0x1f;
+ 		u32 error = frame_status & 0x200;
+ 		u32 pic_struct = (frame_status >> 5) & 0x7;
+@@ -274,12 +269,10 @@ static void codec_h264_frames_ready(struct amvdec_session *sess, u32 status)
+ 			dev_info(core->dev, "Buffer %d decode error\n",
+ 				 buffer_index);
+ 
+-		if (h264->seq_info & 0x4) {
+-			if (pic_struct == PIC_TOP_BOT)
+-				field = V4L2_FIELD_INTERLACED_TB;
+-			else if (pic_struct == PIC_BOT_TOP)
+-				field = V4L2_FIELD_INTERLACED_BT;
+-		}
++		if (pic_struct == PIC_TOP_BOT)
++			field = V4L2_FIELD_INTERLACED_TB;
++		else if (pic_struct == PIC_BOT_TOP)
++			field = V4L2_FIELD_INTERLACED_BT;
+ 
+ 		amvdec_dst_buf_done_idx(sess, buffer_index, field);
+ 	}
+diff --git a/drivers/media/platform/meson/vdec/vdec.c b/drivers/media/platform/meson/vdec/vdec.c
+index b36a12f..b9f63c1 100644
+--- a/drivers/media/platform/meson/vdec/vdec.c
++++ b/drivers/media/platform/meson/vdec/vdec.c
+@@ -849,17 +849,8 @@ void amvdec_dst_buf_done(struct amvdec_session *sess, struct vb2_v4l2_buffer *vb
+ 	spin_unlock_irqrestore(&sess->bufs_spinlock, flags);
+ 
+ 	atomic_dec(&sess->esparser_queued_bufs);
+-	/* Interlaced content has 2 src buffers for
+-	 * 1 dst buffer. Drop an additional entry.
+-	 */
+-	if (field != V4L2_FIELD_NONE) {
+-		atomic_dec(&sess->esparser_queued_bufs);
+-		vdec_rm_first_ts(sess);
+-		sess->min_buffers_eos = 1;
+-	}
+ 
+-	if (sess->should_stop &&
+-	    atomic_read(&sess->esparser_queued_bufs) <= sess->min_buffers_eos) {
++	if (sess->should_stop && list_empty(&sess->bufs)) {
+ 		const struct v4l2_event ev = { .type = V4L2_EVENT_EOS };
+ 		dev_dbg(dev, "Signaling EOS\n");
+ 		v4l2_event_queue_fh(&sess->fh, &ev);
+diff --git a/drivers/media/platform/meson/vdec/vdec.h b/drivers/media/platform/meson/vdec/vdec.h
+index 36690bc..2ec8bce 100644
+--- a/drivers/media/platform/meson/vdec/vdec.h
++++ b/drivers/media/platform/meson/vdec/vdec.h
+@@ -158,13 +158,6 @@ struct amvdec_session {
+ 	/* Tracks last time we got a vdec IRQ */
+ 	u64 last_irq_jiffies;
+ 
+-	/* Minimum remaining queued src buffers to trigger EOS
+-	 * after userspace sent CMD_STOP.
+-	 * Can be 1 in case of an interlaced bitstream that ends with half
+-	 * a frame.
+-	 */
+-	u32 min_buffers_eos;
+-
+ 	/* Codec private data */
+ 	void *priv;
+ };
+-- 
+2.7.4
+

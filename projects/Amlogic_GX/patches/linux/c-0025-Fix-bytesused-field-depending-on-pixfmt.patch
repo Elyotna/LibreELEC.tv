@@ -1,0 +1,53 @@
+From 909af11de7f9d5e26e474bb1d222605781591c34 Mon Sep 17 00:00:00 2001
+From: Maxime Jourdan <maxi.jourdan@wanadoo.fr>
+Date: Tue, 21 Aug 2018 14:34:17 +0200
+Subject: [PATCH 25/35] Fix bytesused field depending on pixfmt
+
+---
+ drivers/media/platform/meson/vdec/vdec.c | 22 ++++++++++++++++++----
+ 1 file changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/media/platform/meson/vdec/vdec.c b/drivers/media/platform/meson/vdec/vdec.c
+index 9d2bee3..8de295e 100644
+--- a/drivers/media/platform/meson/vdec/vdec.c
++++ b/drivers/media/platform/meson/vdec/vdec.c
+@@ -798,9 +798,10 @@ static void vdec_rm_first_ts(struct amvdec_session *sess)
+ 
+ void amvdec_dst_buf_done(struct amvdec_session *sess, struct vb2_v4l2_buffer *vbuf, u32 field)
+ {
+-	unsigned long flags;
+-	struct amvdec_timestamp *tmp;
+ 	struct device *dev = sess->core->dev_dec;
++	struct amvdec_timestamp *tmp;
++	u32 output_size = amvdec_get_output_size(sess);
++	unsigned long flags;
+ 
+ 	spin_lock_irqsave(&sess->bufs_spinlock, flags);
+ 	if (list_empty(&sess->bufs)) {
+@@ -815,8 +816,21 @@ void amvdec_dst_buf_done(struct amvdec_session *sess, struct vb2_v4l2_buffer *vb
+ 
+ 	tmp = list_first_entry(&sess->bufs, struct amvdec_timestamp, list);
+ 
+-	vbuf->vb2_buf.planes[0].bytesused = amvdec_get_output_size(sess);
+-	vbuf->vb2_buf.planes[1].bytesused = amvdec_get_output_size(sess) / 2;
++	switch (sess->pixfmt_cap) {
++	case V4L2_PIX_FMT_NV12M:
++		vbuf->vb2_buf.planes[0].bytesused = output_size;
++		vbuf->vb2_buf.planes[1].bytesused = output_size / 2;
++		break;
++	case V4L2_PIX_FMT_YUV420M:
++		vbuf->vb2_buf.planes[0].bytesused = output_size;
++		vbuf->vb2_buf.planes[1].bytesused = output_size / 4;
++		vbuf->vb2_buf.planes[2].bytesused = output_size / 4;
++		break;
++	case V4L2_PIX_FMT_AM21C:
++		vbuf->vb2_buf.planes[0].bytesused =
++			amcodec_am21c_size(sess->width, sess->height);
++		break;
++	}
+ 	vbuf->vb2_buf.timestamp = tmp->ts;
+ 	vbuf->sequence = sess->sequence_cap++;
+ 
+-- 
+2.7.4
+

@@ -1,0 +1,31 @@
+From b9fdadddb8184f74f9303b8756beab6ecdb05fdd Mon Sep 17 00:00:00 2001
+From: Maxime Jourdan <mjourdan@baylibre.com>
+Date: Sat, 25 Aug 2018 19:18:32 +0200
+Subject: [PATCH 33/35] Fix enum_framesizes implementation
+
+Return the per-codec max width/height instead of 3840*2160 for
+everything
+---
+ drivers/media/platform/meson/vdec/vdec.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/media/platform/meson/vdec/vdec.c b/drivers/media/platform/meson/vdec/vdec.c
+index b9f63c1..d4c2f12 100644
+--- a/drivers/media/platform/meson/vdec/vdec.c
++++ b/drivers/media/platform/meson/vdec/vdec.c
+@@ -563,10 +563,10 @@ static int vdec_enum_framesizes(struct file *file, void *fh,
+ 
+ 	/* TODO: Store these constants in vdec_format */
+ 	fsize->stepwise.min_width = 256;
+-	fsize->stepwise.max_width = 3840;
++	fsize->stepwise.max_width = fmt->max_width;
+ 	fsize->stepwise.step_width = 1;
+ 	fsize->stepwise.min_height = 144;
+-	fsize->stepwise.max_height = 2160;
++	fsize->stepwise.max_height = fmt->max_height;
+ 	fsize->stepwise.step_height = 1;
+ 
+ 	return 0;
+-- 
+2.7.4
+

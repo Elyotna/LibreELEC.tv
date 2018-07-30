@@ -1,0 +1,591 @@
+From e969a1a13d40aa270ef13d329515908888971dec Mon Sep 17 00:00:00 2001
+From: Maxime Jourdan <maxi.jourdan@wanadoo.fr>
+Date: Mon, 20 Aug 2018 10:55:23 +0200
+Subject: [PATCH 19/35] Add register read helpers for DOS and PARSER
+
+---
+ drivers/media/platform/meson/vdec/codec_h264.c   | 34 ++++++++++----------
+ drivers/media/platform/meson/vdec/codec_hevc.c   | 32 +++++++++----------
+ drivers/media/platform/meson/vdec/codec_mjpeg.c  |  4 +--
+ drivers/media/platform/meson/vdec/codec_mpeg12.c |  8 ++---
+ drivers/media/platform/meson/vdec/codec_mpeg4.c  | 12 +++----
+ drivers/media/platform/meson/vdec/esparser.c     |  6 ++--
+ drivers/media/platform/meson/vdec/vdec.c         | 12 +++++++
+ drivers/media/platform/meson/vdec/vdec.h         |  2 ++
+ drivers/media/platform/meson/vdec/vdec_1.c       | 40 ++++++++++++------------
+ drivers/media/platform/meson/vdec/vdec_hevc.c    | 10 +++---
+ 10 files changed, 87 insertions(+), 73 deletions(-)
+
+diff --git a/drivers/media/platform/meson/vdec/codec_h264.c b/drivers/media/platform/meson/vdec/codec_h264.c
+index eceb30e..7b9b163 100644
+--- a/drivers/media/platform/meson/vdec/codec_h264.c
++++ b/drivers/media/platform/meson/vdec/codec_h264.c
+@@ -50,8 +50,8 @@ struct codec_h264 {
+ 
+ static int codec_h264_can_recycle(struct amvdec_core *core)
+ {
+-	return !readl_relaxed(core->dos_base + AV_SCRATCH_7) ||
+-	       !readl_relaxed(core->dos_base + AV_SCRATCH_8);
++	return !amvdec_read_dos(core, AV_SCRATCH_7) ||
++	       !amvdec_read_dos(core, AV_SCRATCH_8);
+ }
+ 
+ static void codec_h264_recycle(struct amvdec_core *core, u32 buf_idx)
+@@ -59,7 +59,7 @@ static void codec_h264_recycle(struct amvdec_core *core, u32 buf_idx)
+ 	/* Tell the decoder he can recycle this buffer.
+ 	 * AV_SCRATCH_8 serves the same purpose.
+ 	 */
+-	if (!readl_relaxed(core->dos_base + AV_SCRATCH_7))
++	if (!amvdec_read_dos(core, AV_SCRATCH_7))
+ 		amvdec_write_dos(core, AV_SCRATCH_7, buf_idx + 1);
+ 	else
+ 		amvdec_write_dos(core, AV_SCRATCH_8, buf_idx + 1);
+@@ -86,20 +86,20 @@ static int codec_h264_start(struct amvdec_session *sess) {
+ 		return -ENOMEM;
+ 	}
+ 
+-	while (readl_relaxed(core->dos_base + DCAC_DMA_CTRL) & 0x8000) { }
+-	while (readl_relaxed(core->dos_base + LMEM_DMA_CTRL) & 0x8000) { }
++	while (amvdec_read_dos(core, DCAC_DMA_CTRL) & 0x8000) { }
++	while (amvdec_read_dos(core, LMEM_DMA_CTRL) & 0x8000) { }
+ 
+ 	amvdec_write_dos(core, DOS_SW_RESET0, (1<<7) | (1<<6) | (1<<4));
+ 	amvdec_write_dos(core, DOS_SW_RESET0, 0);
+-	readl_relaxed(core->dos_base + DOS_SW_RESET0);
++	amvdec_read_dos(core, DOS_SW_RESET0);
+ 
+ 	amvdec_write_dos(core, DOS_SW_RESET0, (1<<7) | (1<<6) | (1<<4));
+ 	amvdec_write_dos(core, DOS_SW_RESET0, 0);
+ 	amvdec_write_dos(core, DOS_SW_RESET0, (1<<9) | (1<<8));
+ 	amvdec_write_dos(core, DOS_SW_RESET0, 0);
+-	readl_relaxed(core->dos_base + DOS_SW_RESET0);
++	amvdec_read_dos(core, DOS_SW_RESET0);
+ 
+-	amvdec_write_dos(core, POWER_CTL_VLD, readl_relaxed(core->dos_base + POWER_CTL_VLD) | (1 << 9) | (1 << 6));
++	amvdec_write_dos(core, POWER_CTL_VLD, amvdec_read_dos(core, POWER_CTL_VLD) | (1 << 9) | (1 << 6));
+ 
+ 	amvdec_write_dos(core, PSCALE_CTRL, 0);
+ 	amvdec_write_dos(core, AV_SCRATCH_0, 0);
+@@ -114,7 +114,7 @@ static int codec_h264_start(struct amvdec_session *sess) {
+ 	amvdec_write_dos(core, AV_SCRATCH_9, 0);
+ 
+ 	/* Enable "error correction", don't know what it means */
+-	amvdec_write_dos(core, AV_SCRATCH_F, (readl_relaxed(core->dos_base + AV_SCRATCH_F) & 0xffffffc3) | (1 << 4) | (1 << 7));
++	amvdec_write_dos(core, AV_SCRATCH_F, (amvdec_read_dos(core, AV_SCRATCH_F) & 0xffffffc3) | (1 << 4) | (1 << 7));
+ 
+ 	/* Enable IRQ */
+ 	amvdec_write_dos(core, ASSIST_MBOX1_CLR_REG, 1);
+@@ -125,7 +125,7 @@ static int codec_h264_start(struct amvdec_session *sess) {
+ 	amvdec_write_dos(core, DOS_SW_RESET0, (1<<12)|(1<<11));
+ 	amvdec_write_dos(core, DOS_SW_RESET0, 0);
+ 
+-	readl_relaxed(core->dos_base + DOS_SW_RESET0);
++	amvdec_read_dos(core, DOS_SW_RESET0);
+ 	return 0;
+ }
+ 
+@@ -192,7 +192,7 @@ static void codec_h264_set_param(struct amvdec_session *sess) {
+ 	amvdec_write_dos(core, AV_SCRATCH_8, 0);
+ 	amvdec_write_dos(core, AV_SCRATCH_9, 0);
+ 
+-	parsed_info = readl_relaxed(core->dos_base + AV_SCRATCH_1);
++	parsed_info = amvdec_read_dos(core, AV_SCRATCH_1);
+ 
+ 	/* Total number of 16x16 macroblocks */
+ 	mb_total = (parsed_info >> 8) & 0xffff;
+@@ -248,7 +248,7 @@ static void codec_h264_frames_ready(struct amvdec_session *sess, u32 status)
+ 	unsigned int buffer_index;
+ 	int i;
+ 
+-	error_count = readl_relaxed(core->dos_base + AV_SCRATCH_D);
++	error_count = amvdec_read_dos(core, AV_SCRATCH_D);
+ 	num_frames = (status >> 8) & 0xff;
+ 	if (error_count) {
+ 		dev_warn(core->dev,
+@@ -257,7 +257,7 @@ static void codec_h264_frames_ready(struct amvdec_session *sess, u32 status)
+ 	}
+ 
+ 	for (i = 0; i < num_frames; i++) {
+-		frame_status = readl_relaxed(core->dos_base + AV_SCRATCH_1 + i*4);
++		frame_status = amvdec_read_dos(core, AV_SCRATCH_1 + i*4);
+ 		buffer_index = frame_status & 0x1f;
+ 		error = frame_status & 0x200;
+ 
+@@ -280,7 +280,7 @@ static irqreturn_t codec_h264_threaded_isr(struct amvdec_session *sess)
+ 	u32 size;
+ 	u8 cmd;
+ 
+-	status = readl_relaxed(core->dos_base + AV_SCRATCH_0);
++	status = amvdec_read_dos(core, AV_SCRATCH_0);
+ 	cmd = status & 0xff;
+ 
+ 	switch (cmd) {
+@@ -294,11 +294,11 @@ static irqreturn_t codec_h264_threaded_isr(struct amvdec_session *sess)
+ 		dev_err(core->dev, "H.264 decoder fatal error\n");
+ 		goto abort;
+ 	case CMD_BAD_WIDTH:
+-		size = (readl_relaxed(core->dos_base + AV_SCRATCH_1) + 1) * 16;
++		size = (amvdec_read_dos(core, AV_SCRATCH_1) + 1) * 16;
+ 		dev_err(core->dev, "Unsupported video width: %u\n", size);
+ 		goto abort;
+ 	case CMD_BAD_HEIGHT:
+-		size = (readl_relaxed(core->dos_base + AV_SCRATCH_1) + 1) * 16;
++		size = (amvdec_read_dos(core, AV_SCRATCH_1) + 1) * 16;
+ 		dev_err(core->dev, "Unsupported video height: %u\n", size);
+ 		goto abort;
+ 	case 9: /* Unused but not worth printing for */
+@@ -312,7 +312,7 @@ static irqreturn_t codec_h264_threaded_isr(struct amvdec_session *sess)
+ 		amvdec_write_dos(core, AV_SCRATCH_0, 0);
+ 
+ 	/* Decoder has some SEI data for us ; ignore */
+-	if (readl_relaxed(core->dos_base + AV_SCRATCH_J) & SEI_DATA_READY)
++	if (amvdec_read_dos(core, AV_SCRATCH_J) & SEI_DATA_READY)
+ 		amvdec_write_dos(core, AV_SCRATCH_J, 0);
+ 
+ 	return IRQ_HANDLED;
+diff --git a/drivers/media/platform/meson/vdec/codec_hevc.c b/drivers/media/platform/meson/vdec/codec_hevc.c
+index 40b3765..b3fbf5b 100644
+--- a/drivers/media/platform/meson/vdec/codec_hevc.c
++++ b/drivers/media/platform/meson/vdec/codec_hevc.c
+@@ -661,12 +661,12 @@ static int codec_hevc_start(struct amvdec_session *sess)
+ 	amvdec_write_dos(core, DOS_SW_RESET3, (1 << 14));
+ 	amvdec_write_dos(core, HEVC_CABAC_CONTROL, 0);
+ 	amvdec_write_dos(core, HEVC_PARSER_CORE_CONTROL, 0);
+-	amvdec_write_dos(core, HEVC_STREAM_CONTROL, readl_relaxed(core->dos_base + HEVC_STREAM_CONTROL) | 1);
++	amvdec_write_dos(core, HEVC_STREAM_CONTROL, amvdec_read_dos(core, HEVC_STREAM_CONTROL) | 1);
+ 	amvdec_write_dos(core, HEVC_SHIFT_STARTCODE, 0x00000100);
+ 	amvdec_write_dos(core, HEVC_SHIFT_EMULATECODE, 0x00000300);
+-	writel_relaxed((readl_relaxed(core->dos_base + HEVC_PARSER_INT_CONTROL) & 0x03ffffff) |
++	writel_relaxed((amvdec_read_dos(core, HEVC_PARSER_INT_CONTROL) & 0x03ffffff) |
+ 			(3 << 29) | (2 << 26) | (1 << 24) | (1 << 22) | (1 << 7) | (1 << 4) | 1, core->dos_base + HEVC_PARSER_INT_CONTROL);
+-	amvdec_write_dos(core, HEVC_SHIFT_STATUS, readl_relaxed(core->dos_base + HEVC_SHIFT_STATUS) | (1 << 1) | 1);
++	amvdec_write_dos(core, HEVC_SHIFT_STATUS, amvdec_read_dos(core, HEVC_SHIFT_STATUS) | (1 << 1) | 1);
+ 	amvdec_write_dos(core, HEVC_SHIFT_CONTROL, (3 << 6) | (2 << 4) | (2 << 1) | 1);
+ 	amvdec_write_dos(core, HEVC_CABAC_CONTROL, 1);
+ 	amvdec_write_dos(core, HEVC_PARSER_CORE_CONTROL, 1);
+@@ -868,7 +868,7 @@ static void codec_hevc_set_sao(struct amvdec_session *sess, struct hevc_frame *f
+ 	u32 slice_deblocking_filter_disabled_flag;
+ 	u32 val, val_2;
+ 
+-	val = (readl_relaxed(core->dos_base + HEVC_SAO_CTRL0) & ~0xf) | ilog2(hevc->lcu_size);
++	val = (amvdec_read_dos(core, HEVC_SAO_CTRL0) & ~0xf) | ilog2(hevc->lcu_size);
+ 	amvdec_write_dos(core, HEVC_SAO_CTRL0, val);
+ 
+ 	amvdec_write_dos(core, HEVC_SAO_PIC_SIZE, hevc->width | (hevc->height << 16));
+@@ -899,7 +899,7 @@ static void codec_hevc_set_sao(struct amvdec_session *sess, struct hevc_frame *f
+ 		amvdec_write_dos(core, HEVC_DBLK_CFG1, val);
+ 	}
+ 
+-	val = readl_relaxed(core->dos_base + HEVC_SAO_CTRL1) & ~0x3ff3;
++	val = amvdec_read_dos(core, HEVC_SAO_CTRL1) & ~0x3ff3;
+ 	if (sess->pixfmt_cap == V4L2_PIX_FMT_NV12M)
+ 		val |= 0xff0 | /* Set endianness for 2-bytes swaps (nv12) */
+ 			 0x1;   /* disable cm compression */
+@@ -912,11 +912,11 @@ static void codec_hevc_set_sao(struct amvdec_session *sess, struct hevc_frame *f
+ 
+ 	if (sess->pixfmt_cap == V4L2_PIX_FMT_NV12M) {
+ 		/* no downscale for NV12 */
+-		val = readl_relaxed(core->dos_base + HEVC_SAO_CTRL5) & ~0xff0000;
++		val = amvdec_read_dos(core, HEVC_SAO_CTRL5) & ~0xff0000;
+ 		amvdec_write_dos(core, HEVC_SAO_CTRL5, val);
+ 	}
+ 
+-	val = readl_relaxed(core->dos_base + HEVCD_IPP_AXIIF_CONFIG) & ~0x30;
++	val = amvdec_read_dos(core, HEVCD_IPP_AXIIF_CONFIG) & ~0x30;
+ 	val |= 0xf;
+ 	if (sess->pixfmt_cap == V4L2_PIX_FMT_AM21C)
+ 		val |= 0x30; /* 64x32 block mode */
+@@ -924,7 +924,7 @@ static void codec_hevc_set_sao(struct amvdec_session *sess, struct hevc_frame *f
+ 	amvdec_write_dos(core, HEVCD_IPP_AXIIF_CONFIG, val);
+ 
+ 	val = 0;
+-	val_2 = readl_relaxed(core->dos_base + HEVC_SAO_CTRL0);
++	val_2 = amvdec_read_dos(core, HEVC_SAO_CTRL0);
+ 	val_2 &= (~0x300);
+ 
+ 	/* TODO: handle tiles here if enabled */
+@@ -1006,7 +1006,7 @@ static void codec_hevc_set_mpred(struct amvdec_session *sess, struct hevc_frame
+ 	u32 val;
+ 	int i;
+ 
+-	val = readl_relaxed(core->dos_base + HEVC_MPRED_CURR_LCU);
++	val = amvdec_read_dos(core, HEVC_MPRED_CURR_LCU);
+ 
+ 	col_mv_rd_start_addr = codec_hevc_get_frame_mv_paddr(hevc, col_frame);
+ 	mpred_mv_wr_ptr = codec_hevc_get_frame_mv_paddr(hevc, frame) + (hevc->slice_addr * mv_mem_unit);
+@@ -1093,7 +1093,7 @@ static void codec_hevc_set_mcrcc(struct amvdec_session *sess)
+ 
+ 	if (hevc->cur_frame->cur_slice_type == P_SLICE) {
+ 		amvdec_write_dos(core, HEVCD_MPP_ANC_CANVAS_ACCCONFIG_ADDR, 1 << 1);
+-		val = readl_relaxed(core->dos_base + HEVCD_MPP_ANC_CANVAS_DATA_ADDR);
++		val = amvdec_read_dos(core, HEVCD_MPP_ANC_CANVAS_DATA_ADDR);
+ 		val &= 0xffff;
+ 		val |= (val << 16);
+ 		amvdec_write_dos(core, HEVCD_MCRCC_CTL2, val);
+@@ -1101,24 +1101,24 @@ static void codec_hevc_set_mcrcc(struct amvdec_session *sess)
+ 		if (l0_cnt == 1) {
+ 			amvdec_write_dos(core, HEVCD_MCRCC_CTL3, val);
+ 		} else {
+-			val = readl_relaxed(core->dos_base + HEVCD_MPP_ANC_CANVAS_DATA_ADDR);
++			val = amvdec_read_dos(core, HEVCD_MPP_ANC_CANVAS_DATA_ADDR);
+ 			val &= 0xffff;
+ 			val |= (val << 16);
+ 			amvdec_write_dos(core, HEVCD_MCRCC_CTL3, val);
+ 		}
+ 	} else { /* B_SLICE */
+ 		amvdec_write_dos(core, HEVCD_MPP_ANC_CANVAS_ACCCONFIG_ADDR, 0);
+-		val = readl_relaxed(core->dos_base + HEVCD_MPP_ANC_CANVAS_DATA_ADDR);
++		val = amvdec_read_dos(core, HEVCD_MPP_ANC_CANVAS_DATA_ADDR);
+ 		val &= 0xffff;
+ 		val |= (val << 16);
+ 		amvdec_write_dos(core, HEVCD_MCRCC_CTL2, val);
+ 
+ 		amvdec_write_dos(core, HEVCD_MPP_ANC_CANVAS_ACCCONFIG_ADDR, (16 << 8) | (1 << 1));
+-		val_2 = readl_relaxed(core->dos_base + HEVCD_MPP_ANC_CANVAS_DATA_ADDR);
++		val_2 = amvdec_read_dos(core, HEVCD_MPP_ANC_CANVAS_DATA_ADDR);
+ 		val_2 &= 0xffff;
+ 		val_2 |= (val_2 << 16);
+ 		if (val == val_2 && l1_cnt > 1) {
+-			val_2 = readl_relaxed(core->dos_base + HEVCD_MPP_ANC_CANVAS_DATA_ADDR);
++			val_2 = amvdec_read_dos(core, HEVCD_MPP_ANC_CANVAS_DATA_ADDR);
+ 			val_2 &= 0xffff;
+ 			val_2 |= (val_2 << 16);
+ 		}
+@@ -1291,7 +1291,7 @@ static int codec_hevc_process_segment(struct amvdec_session *sess)
+ 	codec_hevc_set_mpred(sess, hevc->cur_frame, hevc->col_frame);
+ 	codec_hevc_set_sao(sess, hevc->cur_frame);
+ 
+-	amvdec_write_dos(core, HEVC_WAIT_FLAG, readl_relaxed(core->dos_base + HEVC_WAIT_FLAG) | 2);
++	amvdec_write_dos(core, HEVC_WAIT_FLAG, amvdec_read_dos(core, HEVC_WAIT_FLAG) | 2);
+ 	amvdec_write_dos(core, HEVC_DEC_STATUS_REG, HEVC_CODED_SLICE_SEGMENT_DAT);
+ 
+ 	/* Interrupt the firmware's processor */
+@@ -1393,7 +1393,7 @@ static irqreturn_t codec_hevc_isr(struct amvdec_session *sess)
+ 	struct amvdec_core *core = sess->core;
+ 	struct codec_hevc *hevc = sess->priv;
+ 
+-	hevc->dec_status = readl_relaxed(core->dos_base + HEVC_DEC_STATUS_REG);
++	hevc->dec_status = amvdec_read_dos(core, HEVC_DEC_STATUS_REG);
+ 
+ 	return IRQ_WAKE_THREAD;
+ }
+diff --git a/drivers/media/platform/meson/vdec/codec_mjpeg.c b/drivers/media/platform/meson/vdec/codec_mjpeg.c
+index c75d4cd..81fab24 100644
+--- a/drivers/media/platform/meson/vdec/codec_mjpeg.c
++++ b/drivers/media/platform/meson/vdec/codec_mjpeg.c
+@@ -17,7 +17,7 @@
+ 
+ static int codec_mjpeg_can_recycle(struct amvdec_core *core)
+ {
+-	return !readl_relaxed(core->dos_base + MREG_TO_AMRISC);
++	return !amvdec_read_dos(core, MREG_TO_AMRISC);
+ }
+ 
+ static void codec_mjpeg_recycle(struct amvdec_core *core, u32 buf_idx)
+@@ -124,7 +124,7 @@ static irqreturn_t codec_mjpeg_isr(struct amvdec_session *sess)
+ 
+ 	amvdec_write_dos(core, ASSIST_MBOX1_CLR_REG, 1);
+ 
+-	reg = readl_relaxed(core->dos_base + MREG_FROM_AMRISC);
++	reg = amvdec_read_dos(core, MREG_FROM_AMRISC);
+ 	if (!(reg & 0x7))
+ 		return IRQ_HANDLED;
+ 
+diff --git a/drivers/media/platform/meson/vdec/codec_mpeg12.c b/drivers/media/platform/meson/vdec/codec_mpeg12.c
+index 4686be7..9ba998e 100644
+--- a/drivers/media/platform/meson/vdec/codec_mpeg12.c
++++ b/drivers/media/platform/meson/vdec/codec_mpeg12.c
+@@ -35,7 +35,7 @@ struct codec_mpeg12 {
+ 
+ static int codec_mpeg12_can_recycle(struct amvdec_core *core)
+ {
+-	return !readl_relaxed(core->dos_base + MREG_BUFFERIN);
++	return !amvdec_read_dos(core, MREG_BUFFERIN);
+ }
+ 
+ static void codec_mpeg12_recycle(struct amvdec_core *core, u32 buf_idx)
+@@ -64,7 +64,7 @@ static int codec_mpeg12_start(struct amvdec_session *sess) {
+ 
+ 	amvdec_write_dos(core, DOS_SW_RESET0, (1<<9) | (1<<8) | (1<<7) | (1<<6) | (1<<4));
+ 	amvdec_write_dos(core, DOS_SW_RESET0, 0);
+-	readl_relaxed(core->dos_base + DOS_SW_RESET0);
++	amvdec_read_dos(core, DOS_SW_RESET0);
+ 
+ 	amvdec_write_dos(core, POWER_CTL_VLD, (1 << 4));
+ 
+@@ -111,11 +111,11 @@ static irqreturn_t codec_mpeg12_isr(struct amvdec_session *sess)
+ 
+ 	amvdec_write_dos(core, ASSIST_MBOX1_CLR_REG, 1);
+ 
+-	reg = readl_relaxed(core->dos_base + MREG_FATAL_ERROR);
++	reg = amvdec_read_dos(core, MREG_FATAL_ERROR);
+ 	if (reg == 1)
+ 		dev_err(core->dev, "MPEG12 fatal error\n");
+ 
+-	reg = readl_relaxed(core->dos_base + MREG_BUFFEROUT);
++	reg = amvdec_read_dos(core, MREG_BUFFEROUT);
+ 	if (!reg)
+ 		return IRQ_HANDLED;
+ 
+diff --git a/drivers/media/platform/meson/vdec/codec_mpeg4.c b/drivers/media/platform/meson/vdec/codec_mpeg4.c
+index d4a7bfa..10a03b9 100644
+--- a/drivers/media/platform/meson/vdec/codec_mpeg4.c
++++ b/drivers/media/platform/meson/vdec/codec_mpeg4.c
+@@ -35,7 +35,7 @@ struct codec_mpeg4 {
+ 
+ static int codec_mpeg4_can_recycle(struct amvdec_core *core)
+ {
+-	return !readl_relaxed(core->dos_base + MREG_BUFFERIN);
++	return !amvdec_read_dos(core, MREG_BUFFERIN);
+ }
+ 
+ static void codec_mpeg4_recycle(struct amvdec_core *core, u32 buf_idx)
+@@ -103,7 +103,7 @@ static int codec_mpeg4_start(struct amvdec_session *sess) {
+ 
+ 	amvdec_write_dos(core, DOS_SW_RESET0, (1<<7) | (1<<6));
+ 	amvdec_write_dos(core, DOS_SW_RESET0, 0);
+-	readl_relaxed(core->dos_base + DOS_SW_RESET0);
++	amvdec_read_dos(core, DOS_SW_RESET0);
+ 
+ 	codec_mpeg4_set_canvases(sess);
+ 
+@@ -143,15 +143,15 @@ static irqreturn_t codec_mpeg4_isr(struct amvdec_session *sess)
+ 	u32 buffer_index;
+ 	struct amvdec_core *core = sess->core;
+ 
+-	reg = readl_relaxed(core->dos_base + MREG_FATAL_ERROR);
++	reg = amvdec_read_dos(core, MREG_FATAL_ERROR);
+ 	if (reg == 1)
+ 		dev_err(core->dev, "mpeg4 fatal error\n");
+ 
+-	reg = readl_relaxed(core->dos_base + MREG_BUFFEROUT);
++	reg = amvdec_read_dos(core, MREG_BUFFEROUT);
+ 	if (reg) {
+ 		sess->keyframe_found = 1;
+-		readl_relaxed(core->dos_base + MP4_NOT_CODED_CNT);
+-		readl_relaxed(core->dos_base + MP4_VOP_TIME_INC);
++		amvdec_read_dos(core, MP4_NOT_CODED_CNT);
++		amvdec_read_dos(core, MP4_VOP_TIME_INC);
+ 		buffer_index = reg & 0x7;
+ 		amvdec_dst_buf_done_idx(sess, buffer_index);
+ 		amvdec_write_dos(core, MREG_BUFFEROUT, 0);
+diff --git a/drivers/media/platform/meson/vdec/esparser.c b/drivers/media/platform/meson/vdec/esparser.c
+index 2e61937..8639e2a 100644
+--- a/drivers/media/platform/meson/vdec/esparser.c
++++ b/drivers/media/platform/meson/vdec/esparser.c
+@@ -104,7 +104,7 @@ static irqreturn_t esparser_isr(int irq, void *dev)
+ 	int int_status;
+ 	struct amvdec_core *core = dev;
+ 
+-	int_status = readl_relaxed(core->esparser_base + PARSER_INT_STATUS);
++	int_status = amvdec_read_parser(core, PARSER_INT_STATUS);
+ 	amvdec_write_parser(core, PARSER_INT_STATUS, int_status);
+ 
+ 	if (int_status & PARSER_INTSTAT_SC_FOUND) {
+@@ -163,7 +163,7 @@ static u32 esparser_vififo_get_free_space(struct amvdec_session *sess)
+ 	struct amvdec_core *core = sess->core;
+ 
+ 	vififo_usage  = vdec_ops->vififo_level(sess);
+-	vififo_usage += readl_relaxed(core->esparser_base + PARSER_VIDEO_HOLE);
++	vififo_usage += amvdec_read_parser(core, PARSER_VIDEO_HOLE);
+ 	vififo_usage += (6 * SZ_1K);
+ 
+ 	if (vififo_usage > sess->vififo_size) {
+@@ -297,7 +297,7 @@ int esparser_power_up(struct amvdec_session *sess)
+ 
+ 	amvdec_write_parser(core, PARSER_VIDEO_START_PTR, sess->vififo_paddr);
+ 	amvdec_write_parser(core, PARSER_VIDEO_END_PTR, sess->vififo_paddr + sess->vififo_size - 8);
+-	amvdec_write_parser(core, PARSER_ES_CONTROL, readl_relaxed(core->esparser_base + PARSER_ES_CONTROL) & ~1);
++	amvdec_write_parser(core, PARSER_ES_CONTROL, amvdec_read_parser(core, PARSER_ES_CONTROL) & ~1);
+ 	
+ 	if (vdec_ops->conf_esparser)
+ 		vdec_ops->conf_esparser(sess);
+diff --git a/drivers/media/platform/meson/vdec/vdec.c b/drivers/media/platform/meson/vdec/vdec.c
+index 0687bd5..444a3a5 100644
+--- a/drivers/media/platform/meson/vdec/vdec.c
++++ b/drivers/media/platform/meson/vdec/vdec.c
+@@ -924,12 +924,24 @@ static const struct v4l2_file_operations vdec_fops = {
+ #endif
+ };
+ 
++u32 amvdec_read_dos(struct amvdec_core *core, u32 reg)
++{
++	return readl_relaxed(core->dos_base + reg);
++}
++EXPORT_SYMBOL_GPL(amvdec_read_dos);
++
+ void amvdec_write_dos(struct amvdec_core *core, u32 reg, u32 val)
+ {
+ 	writel_relaxed(val, core->dos_base + reg);
+ }
+ EXPORT_SYMBOL_GPL(amvdec_write_dos);
+ 
++u32 amvdec_read_parser(struct amvdec_core *core, u32 reg)
++{
++	return readl_relaxed(core->esparser_base + reg);
++}
++EXPORT_SYMBOL_GPL(amvdec_read_parser);
++
+ void amvdec_write_parser(struct amvdec_core *core, u32 reg, u32 val)
+ {
+ 	writel_relaxed(val, core->esparser_base + reg);
+diff --git a/drivers/media/platform/meson/vdec/vdec.h b/drivers/media/platform/meson/vdec/vdec.h
+index b8f4bee..246e704 100644
+--- a/drivers/media/platform/meson/vdec/vdec.h
++++ b/drivers/media/platform/meson/vdec/vdec.h
+@@ -161,7 +161,9 @@ void amvdec_add_ts_reorder(struct amvdec_session *sess, u64 ts);
+ void amvdec_remove_ts(struct amvdec_session *sess, u64 ts);
+ void amvdec_abort(struct amvdec_session *sess);
+ 
++u32 amvdec_read_dos(struct amvdec_core *core, u32 reg);
+ void amvdec_write_dos(struct amvdec_core *core, u32 reg, u32 val);
++u32 amvdec_read_parser(struct amvdec_core *core, u32 reg);
+ void amvdec_write_parser(struct amvdec_core *core, u32 reg, u32 val);
+ 
+ #endif
+diff --git a/drivers/media/platform/meson/vdec/vdec_1.c b/drivers/media/platform/meson/vdec/vdec_1.c
+index 6f47e5d..6b7800f 100644
+--- a/drivers/media/platform/meson/vdec/vdec_1.c
++++ b/drivers/media/platform/meson/vdec/vdec_1.c
+@@ -67,7 +67,7 @@ static int vdec_1_load_firmware(struct amvdec_session *sess, const char* fwname)
+ 	amvdec_write_dos(core, MPSR, 0);
+ 	amvdec_write_dos(core, CPSR, 0);
+ 
+-	amvdec_write_dos(core, MDEC_PIC_DC_CTRL, readl_relaxed(core->dos_base + MDEC_PIC_DC_CTRL) & ~(1<<31));
++	amvdec_write_dos(core, MDEC_PIC_DC_CTRL, amvdec_read_dos(core, MDEC_PIC_DC_CTRL) & ~(1<<31));
+ 
+ 	amvdec_write_dos(core, IMEM_DMA_ADR, mc_addr_map);
+ 	amvdec_write_dos(core, IMEM_DMA_COUNT, MC_SIZE / 4);
+@@ -102,16 +102,16 @@ int vdec_1_stbuf_power_up(struct amvdec_session *sess) {
+ 	amvdec_write_dos(core, VLD_MEM_VIFIFO_CURR_PTR, sess->vififo_paddr);
+ 	amvdec_write_dos(core, VLD_MEM_VIFIFO_END_PTR, sess->vififo_paddr + sess->vififo_size - 8);
+ 
+-	amvdec_write_dos(core, VLD_MEM_VIFIFO_CONTROL, readl_relaxed(core->dos_base + VLD_MEM_VIFIFO_CONTROL) |  1);
+-	amvdec_write_dos(core, VLD_MEM_VIFIFO_CONTROL, readl_relaxed(core->dos_base + VLD_MEM_VIFIFO_CONTROL) & ~1);
++	amvdec_write_dos(core, VLD_MEM_VIFIFO_CONTROL, amvdec_read_dos(core, VLD_MEM_VIFIFO_CONTROL) |  1);
++	amvdec_write_dos(core, VLD_MEM_VIFIFO_CONTROL, amvdec_read_dos(core, VLD_MEM_VIFIFO_CONTROL) & ~1);
+ 
+ 	amvdec_write_dos(core, VLD_MEM_VIFIFO_BUF_CNTL, MEM_BUFCTRL_MANUAL);
+ 	amvdec_write_dos(core, VLD_MEM_VIFIFO_WP, sess->vififo_paddr);
+ 
+-	amvdec_write_dos(core, VLD_MEM_VIFIFO_BUF_CNTL, readl_relaxed(core->dos_base + VLD_MEM_VIFIFO_BUF_CNTL) |  1);
+-	amvdec_write_dos(core, VLD_MEM_VIFIFO_BUF_CNTL, readl_relaxed(core->dos_base + VLD_MEM_VIFIFO_BUF_CNTL) & ~1);
++	amvdec_write_dos(core, VLD_MEM_VIFIFO_BUF_CNTL, amvdec_read_dos(core, VLD_MEM_VIFIFO_BUF_CNTL) |  1);
++	amvdec_write_dos(core, VLD_MEM_VIFIFO_BUF_CNTL, amvdec_read_dos(core, VLD_MEM_VIFIFO_BUF_CNTL) & ~1);
+ 
+-	amvdec_write_dos(core, VLD_MEM_VIFIFO_CONTROL, readl_relaxed(core->dos_base + VLD_MEM_VIFIFO_CONTROL) | (0x11 << MEM_FIFO_CNT_BIT) | MEM_FILL_ON_LEVEL | MEM_CTRL_FILL_EN | MEM_CTRL_EMPTY_EN);
++	amvdec_write_dos(core, VLD_MEM_VIFIFO_CONTROL, amvdec_read_dos(core, VLD_MEM_VIFIFO_CONTROL) | (0x11 << MEM_FIFO_CNT_BIT) | MEM_FILL_ON_LEVEL | MEM_CTRL_FILL_EN | MEM_CTRL_EMPTY_EN);
+ 
+ 	return 0;
+ }
+@@ -123,14 +123,14 @@ static void vdec_1_conf_esparser(struct amvdec_session *sess)
+ 	/* VDEC_1 specific ESPARSER stuff */
+ 	amvdec_write_dos(core, DOS_GEN_CTRL0, 0); // set vififo_vbuf_rp_sel=>vdec
+ 	amvdec_write_dos(core, VLD_MEM_VIFIFO_BUF_CNTL, 1);
+-	amvdec_write_dos(core, VLD_MEM_VIFIFO_BUF_CNTL, readl_relaxed(core->dos_base + VLD_MEM_VIFIFO_BUF_CNTL) & ~1);
++	amvdec_write_dos(core, VLD_MEM_VIFIFO_BUF_CNTL, amvdec_read_dos(core, VLD_MEM_VIFIFO_BUF_CNTL) & ~1);
+ }
+ 
+ static u32 vdec_1_vififo_level(struct amvdec_session *sess)
+ {
+ 	struct amvdec_core *core = sess->core;
+ 
+-	return readl_relaxed(core->dos_base + VLD_MEM_VIFIFO_LEVEL);
++	return amvdec_read_dos(core, VLD_MEM_VIFIFO_LEVEL);
+ }
+ 
+ static int vdec_1_start(struct amvdec_session *sess)
+@@ -162,7 +162,7 @@ static int vdec_1_start(struct amvdec_session *sess)
+ 	amvdec_write_dos(core, DOS_VDEC_MCRCC_STALL_CTRL, 0x00000000);
+ 
+ 	amvdec_write_dos(core, GCLK_EN, 0x3ff);
+-	amvdec_write_dos(core, MDEC_PIC_DC_CTRL, readl_relaxed(core->dos_base + MDEC_PIC_DC_CTRL) & ~(1<<31));
++	amvdec_write_dos(core, MDEC_PIC_DC_CTRL, amvdec_read_dos(core, MDEC_PIC_DC_CTRL) & ~(1<<31));
+ 
+ 	vdec_1_stbuf_power_up(sess);
+ 
+@@ -178,7 +178,7 @@ static int vdec_1_start(struct amvdec_session *sess)
+ 
+ 	/* Enable 2-plane output */
+ 	if (sess->pixfmt_cap == V4L2_PIX_FMT_NV12M)
+-		amvdec_write_dos(core, MDEC_PIC_DC_CTRL, readl_relaxed(core->dos_base + MDEC_PIC_DC_CTRL) | (1 << 17));
++		amvdec_write_dos(core, MDEC_PIC_DC_CTRL, amvdec_read_dos(core, MDEC_PIC_DC_CTRL) | (1 << 17));
+ 
+ 	/* Enable firmware processor */
+ 	amvdec_write_dos(core, MPSR, 1);
+@@ -198,27 +198,27 @@ static int vdec_1_stop(struct amvdec_session *sess)
+ 
+ 	codec_ops->stop(sess);
+ 
+-	while (readl_relaxed(core->dos_base + IMEM_DMA_CTRL) & 0x8000) { }
++	while (amvdec_read_dos(core, IMEM_DMA_CTRL) & 0x8000) { }
+ 
+ 	amvdec_write_dos(core, DOS_SW_RESET0, (1<<12)|(1<<11));
+ 	amvdec_write_dos(core, DOS_SW_RESET0, 0);
+-	readl_relaxed(core->dos_base + DOS_SW_RESET0);
++	amvdec_read_dos(core, DOS_SW_RESET0);
+ 
+ 	amvdec_write_dos(core, ASSIST_MBOX1_MASK, 0);
+ 
+-	amvdec_write_dos(core, MDEC_PIC_DC_CTRL, readl_relaxed(core->dos_base + MDEC_PIC_DC_CTRL) | 1);
+-	amvdec_write_dos(core, MDEC_PIC_DC_CTRL, readl_relaxed(core->dos_base + MDEC_PIC_DC_CTRL) & ~1);
+-	readl_relaxed(core->dos_base + MDEC_PIC_DC_STATUS);
++	amvdec_write_dos(core, MDEC_PIC_DC_CTRL, amvdec_read_dos(core, MDEC_PIC_DC_CTRL) | 1);
++	amvdec_write_dos(core, MDEC_PIC_DC_CTRL, amvdec_read_dos(core, MDEC_PIC_DC_CTRL) & ~1);
++	amvdec_read_dos(core, MDEC_PIC_DC_STATUS);
+ 
+ 	amvdec_write_dos(core, DBLK_CTRL, 3);
+ 	amvdec_write_dos(core, DBLK_CTRL, 0);
+-	readl_relaxed(core->dos_base + DBLK_STATUS);
++	amvdec_read_dos(core, DBLK_STATUS);
+ 
+-	amvdec_write_dos(core, MC_CTRL1, readl_relaxed(core->dos_base + MC_CTRL1) | 0x9);
+-	amvdec_write_dos(core, MC_CTRL1, readl_relaxed(core->dos_base + MC_CTRL1) & ~0x9);
+-	readl_relaxed(core->dos_base + MC_STATUS0);
++	amvdec_write_dos(core, MC_CTRL1, amvdec_read_dos(core, MC_CTRL1) | 0x9);
++	amvdec_write_dos(core, MC_CTRL1, amvdec_read_dos(core, MC_CTRL1) & ~0x9);
++	amvdec_read_dos(core, MC_STATUS0);
+ 
+-	while (readl_relaxed(core->dos_base + DCAC_DMA_CTRL) & 0x8000) { }
++	while (amvdec_read_dos(core, DCAC_DMA_CTRL) & 0x8000) { }
+ 
+ 	/* enable vdec1 isolation */
+ 	regmap_write(core->regmap_ao, AO_RTI_GEN_PWR_ISO0, 0xc0);
+diff --git a/drivers/media/platform/meson/vdec/vdec_hevc.c b/drivers/media/platform/meson/vdec/vdec_hevc.c
+index 203bba5..3a7f851 100644
+--- a/drivers/media/platform/meson/vdec/vdec_hevc.c
++++ b/drivers/media/platform/meson/vdec/vdec_hevc.c
+@@ -73,7 +73,7 @@ static void vdec_hevc_stbuf_init(struct amvdec_session *sess)
+ {
+ 	struct amvdec_core *core = sess->core;
+ 
+-	amvdec_write_dos(core, HEVC_STREAM_CONTROL, readl_relaxed(core->dos_base + HEVC_STREAM_CONTROL) & ~1);
++	amvdec_write_dos(core, HEVC_STREAM_CONTROL, amvdec_read_dos(core, HEVC_STREAM_CONTROL) & ~1);
+ 	amvdec_write_dos(core, HEVC_STREAM_START_ADDR, sess->vififo_paddr);
+ 	amvdec_write_dos(core, HEVC_STREAM_END_ADDR, sess->vififo_paddr + sess->vififo_size);
+ 	amvdec_write_dos(core, HEVC_STREAM_RD_PTR, sess->vififo_paddr);
+@@ -87,9 +87,9 @@ static void vdec_hevc_conf_esparser(struct amvdec_session *sess)
+ 
+ 	/* set vififo_vbuf_rp_sel=>vdec_hevc */
+ 	amvdec_write_dos(core, DOS_GEN_CTRL0, 3 << 1);
+-	amvdec_write_dos(core, HEVC_STREAM_CONTROL, readl_relaxed(core->dos_base + HEVC_STREAM_CONTROL) | (1 << 3));
+-	amvdec_write_dos(core, HEVC_STREAM_CONTROL, readl_relaxed(core->dos_base + HEVC_STREAM_CONTROL) | 1);
+-	amvdec_write_dos(core, HEVC_STREAM_FIFO_CTL, readl_relaxed(core->dos_base + HEVC_STREAM_FIFO_CTL) | (1 << 29));
++	amvdec_write_dos(core, HEVC_STREAM_CONTROL, amvdec_read_dos(core, HEVC_STREAM_CONTROL) | (1 << 3));
++	amvdec_write_dos(core, HEVC_STREAM_CONTROL, amvdec_read_dos(core, HEVC_STREAM_CONTROL) | 1);
++	amvdec_write_dos(core, HEVC_STREAM_FIFO_CTL, amvdec_read_dos(core, HEVC_STREAM_FIFO_CTL) | (1 << 29));
+ }
+ 
+ static u32 vdec_hevc_vififo_level(struct amvdec_session *sess)
+@@ -165,7 +165,7 @@ static int vdec_hevc_start(struct amvdec_session *sess)
+ 
+ 	amvdec_write_dos(core, DOS_SW_RESET3, (1<<12)|(1<<11));
+ 	amvdec_write_dos(core, DOS_SW_RESET3, 0);
+-	readl_relaxed(core->dos_base + DOS_SW_RESET3);
++	amvdec_read_dos(core, DOS_SW_RESET3);
+ 
+ 	amvdec_write_dos(core, HEVC_MPSR, 1);
+ 
+-- 
+2.7.4
+

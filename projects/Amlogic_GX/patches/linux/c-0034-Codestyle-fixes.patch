@@ -1,0 +1,242 @@
+From 42407d6277427fa9d2ffa8de274e566ed2680927 Mon Sep 17 00:00:00 2001
+From: Maxime Jourdan <mjourdan@baylibre.com>
+Date: Sat, 25 Aug 2018 19:19:27 +0200
+Subject: [PATCH 34/35] Codestyle fixes
+
+---
+ drivers/media/platform/meson/vdec/codec_hevc.c   | 36 ++++++++++++++++--------
+ drivers/media/platform/meson/vdec/codec_mjpeg.c  |  1 -
+ drivers/media/platform/meson/vdec/codec_mpeg12.c |  1 -
+ drivers/media/platform/meson/vdec/codec_mpeg4.c  |  1 -
+ drivers/media/platform/meson/vdec/esparser.c     |  2 +-
+ drivers/media/platform/meson/vdec/vdec.c         | 22 +++++++++------
+ 6 files changed, 39 insertions(+), 24 deletions(-)
+
+diff --git a/drivers/media/platform/meson/vdec/codec_hevc.c b/drivers/media/platform/meson/vdec/codec_hevc.c
+index 6b6da95..f7ed128 100644
+--- a/drivers/media/platform/meson/vdec/codec_hevc.c
++++ b/drivers/media/platform/meson/vdec/codec_hevc.c
+@@ -210,7 +210,7 @@ enum slice_type {
+ 	I_SLICE = 2,
+ };
+ 
+-/* Refers to a frame being decoded */
++/* A frame being decoded */
+ struct hevc_frame {
+ 	struct list_head list;
+ 	struct vb2_v4l2_buffer *vbuf;
+@@ -942,16 +942,21 @@ static void codec_hevc_set_sao(struct amvdec_session *sess, struct hevc_frame *f
+ 	u32 slice_deblocking_filter_disabled_flag;
+ 	u32 val, val_2;
+ 
+-	val = (amvdec_read_dos(core, HEVC_SAO_CTRL0) & ~0xf) | ilog2(hevc->lcu_size);
++	val = (amvdec_read_dos(core, HEVC_SAO_CTRL0) & ~0xf) |
++	      ilog2(hevc->lcu_size);
+ 	amvdec_write_dos(core, HEVC_SAO_CTRL0, val);
+ 
+-	amvdec_write_dos(core, HEVC_SAO_PIC_SIZE, hevc->width | (hevc->height << 16));
+-	amvdec_write_dos(core, HEVC_SAO_PIC_SIZE_LCU, (hevc->lcu_x_num - 1) | (hevc->lcu_y_num - 1) << 16);
++	amvdec_write_dos(core, HEVC_SAO_PIC_SIZE,
++			 hevc->width | (hevc->height << 16));
++	amvdec_write_dos(core, HEVC_SAO_PIC_SIZE_LCU,
++			 (hevc->lcu_x_num - 1) | (hevc->lcu_y_num - 1) << 16);
+ 
+ 	if (codec_hevc_use_downsample(sess))
+-		buf_y_paddr = hevc->fbc_buffer_paddr[frame->vbuf->vb2_buf.index];
++		buf_y_paddr =
++			hevc->fbc_buffer_paddr[frame->vbuf->vb2_buf.index];
+ 	else
+-		buf_y_paddr = vb2_dma_contig_plane_dma_addr(&frame->vbuf->vb2_buf, 0);
++		buf_y_paddr =
++		       vb2_dma_contig_plane_dma_addr(&frame->vbuf->vb2_buf, 0);
+ 
+ 	if (codec_hevc_use_fbc(sess)) {
+ 		val = amvdec_read_dos(core, HEVC_SAO_CTRL5) & ~0xff0200;
+@@ -960,8 +965,10 @@ static void codec_hevc_set_sao(struct amvdec_session *sess, struct hevc_frame *f
+ 	}
+ 
+ 	if (sess->pixfmt_cap == V4L2_PIX_FMT_NV12M) {
+-		buf_y_paddr = vb2_dma_contig_plane_dma_addr(&frame->vbuf->vb2_buf, 0);
+-		buf_u_v_paddr = vb2_dma_contig_plane_dma_addr(&frame->vbuf->vb2_buf, 1);
++		buf_y_paddr =
++		       vb2_dma_contig_plane_dma_addr(&frame->vbuf->vb2_buf, 0);
++		buf_u_v_paddr =
++		       vb2_dma_contig_plane_dma_addr(&frame->vbuf->vb2_buf, 1);
+ 		amvdec_write_dos(core, HEVC_SAO_Y_START_ADDR, buf_y_paddr);
+ 		amvdec_write_dos(core, HEVC_SAO_C_START_ADDR, buf_u_v_paddr);
+ 		amvdec_write_dos(core, HEVC_SAO_Y_WPTR, buf_y_paddr);
+@@ -969,7 +976,8 @@ static void codec_hevc_set_sao(struct amvdec_session *sess, struct hevc_frame *f
+ 	}
+ 
+ 	amvdec_write_dos(core, HEVC_SAO_Y_LENGTH, amvdec_get_output_size(sess));
+-	amvdec_write_dos(core, HEVC_SAO_C_LENGTH, (amvdec_get_output_size(sess) / 2));
++	amvdec_write_dos(core, HEVC_SAO_C_LENGTH,
++			 (amvdec_get_output_size(sess) / 2));
+ 
+ 	if (frame->cur_slice_idx == 0) {
+ 		amvdec_write_dos(core, HEVC_DBLK_CFG2, hevc->width | (hevc->height << 16));
+@@ -1104,8 +1112,7 @@ static void codec_hevc_set_mpred(struct amvdec_session *sess, struct hevc_frame
+ 		mv_rd_en = 0;
+ 
+ 	val = slice_type |
+-	      BIT(2) | // new pic
+-	      BIT(3) | // new tile
++	      BIT(3) | /* new tile */
+ 	      is_next_slice_segment << 4 |
+ 	      tmvp_flag << 5 |
+ 	      hevc->ldc_flag << 6 |
+@@ -1116,6 +1123,10 @@ static void codec_hevc_set_mpred(struct amvdec_session *sess, struct hevc_frame
+ 	      BIT(13) |
+ 	      lcu_size_log2 << 16 |
+ 	      3 << 20 | plevel << 24;
++
++	if (slice_segment_address == 0)
++		val |= BIT(2); /* new frame */
++
+ 	amvdec_write_dos(core, HEVC_MPRED_CTRL0, val);
+ 
+ 	val = max_num_merge_cand | 2 << 4 | 3 << 8 | 5 << 12 | 36 << 16;
+@@ -1143,7 +1154,8 @@ static void codec_hevc_set_mpred(struct amvdec_session *sess, struct hevc_frame
+ 	}
+ 
+ 	if (slice_segment_address == 0) {
+-		amvdec_write_dos(core, HEVC_MPRED_ABV_START_ADDR, hevc->workspace_paddr + MPRED_ABV_OFFSET);
++		amvdec_write_dos(core, HEVC_MPRED_ABV_START_ADDR,
++				 hevc->workspace_paddr + MPRED_ABV_OFFSET);
+ 		amvdec_write_dos(core, HEVC_MPRED_MV_WPTR, mpred_mv_wr_ptr);
+ 		amvdec_write_dos(core, HEVC_MPRED_MV_RPTR, col_mv_rd_start_addr);
+ 	} else {
+diff --git a/drivers/media/platform/meson/vdec/codec_mjpeg.c b/drivers/media/platform/meson/vdec/codec_mjpeg.c
+index c6a8018..a234694 100644
+--- a/drivers/media/platform/meson/vdec/codec_mjpeg.c
++++ b/drivers/media/platform/meson/vdec/codec_mjpeg.c
+@@ -6,7 +6,6 @@
+ #include <media/v4l2-mem2mem.h>
+ #include <media/videobuf2-dma-contig.h>
+ 
+-#include "codec_mjpeg.h"
+ #include "codec_helpers.h"
+ #include "dos_regs.h"
+ 
+diff --git a/drivers/media/platform/meson/vdec/codec_mpeg12.c b/drivers/media/platform/meson/vdec/codec_mpeg12.c
+index bddddde..4cd6227 100644
+--- a/drivers/media/platform/meson/vdec/codec_mpeg12.c
++++ b/drivers/media/platform/meson/vdec/codec_mpeg12.c
+@@ -6,7 +6,6 @@
+ #include <media/v4l2-mem2mem.h>
+ #include <media/videobuf2-dma-contig.h>
+ 
+-#include "codec_mpeg12.h"
+ #include "codec_helpers.h"
+ #include "dos_regs.h"
+ 
+diff --git a/drivers/media/platform/meson/vdec/codec_mpeg4.c b/drivers/media/platform/meson/vdec/codec_mpeg4.c
+index a76d535..8e2530d 100644
+--- a/drivers/media/platform/meson/vdec/codec_mpeg4.c
++++ b/drivers/media/platform/meson/vdec/codec_mpeg4.c
+@@ -6,7 +6,6 @@
+ #include <media/v4l2-mem2mem.h>
+ #include <media/videobuf2-dma-contig.h>
+ 
+-#include "codec_mpeg4.h"
+ #include "codec_helpers.h"
+ #include "dos_regs.h"
+ 
+diff --git a/drivers/media/platform/meson/vdec/esparser.c b/drivers/media/platform/meson/vdec/esparser.c
+index 9fbfcb5..9f8af61 100644
+--- a/drivers/media/platform/meson/vdec/esparser.c
++++ b/drivers/media/platform/meson/vdec/esparser.c
+@@ -219,7 +219,7 @@ static int esparser_queue(struct amvdec_session *sess, struct vb2_v4l2_buffer *v
+ 	num_dst_bufs += v4l2_m2m_num_dst_bufs_ready(sess->m2m_ctx);
+ 
+ 	if (esparser_vififo_get_free_space(sess) < payload_size ||
+-	    atomic_read(&sess->esparser_queued_bufs) >= (num_dst_bufs))
++	    atomic_read(&sess->esparser_queued_bufs) >= num_dst_bufs)
+ 		return -EAGAIN;
+ 
+ 	v4l2_m2m_src_buf_remove_by_buf(sess->m2m_ctx, vbuf);
+diff --git a/drivers/media/platform/meson/vdec/vdec.c b/drivers/media/platform/meson/vdec/vdec.c
+index d4c2f12..dce159c 100644
+--- a/drivers/media/platform/meson/vdec/vdec.c
++++ b/drivers/media/platform/meson/vdec/vdec.c
+@@ -115,7 +115,8 @@ static void vdec_poweroff(struct amvdec_session *sess) {
+ 	clk_disable_unprepare(sess->core->dos_parser_clk);
+ }
+ 
+-static void vdec_queue_recycle(struct amvdec_session *sess, struct vb2_buffer *vb)
++static void
++vdec_queue_recycle(struct amvdec_session *sess, struct vb2_buffer *vb)
+ {
+ 	struct amvdec_buffer *new_buf;
+ 
+@@ -171,7 +172,8 @@ static int vdec_queue_setup(struct vb2_queue *q,
+ 			sizes[0] = amcodec_am21c_size(sess->width, sess->height);
+ 			*num_planes = 1;
+ 		}
+-		*num_buffers = min(max(*num_buffers, fmt_out->min_buffers), fmt_out->max_buffers);
++		*num_buffers = min(max(*num_buffers, fmt_out->min_buffers),
++				   fmt_out->max_buffers);
+ 		break;
+ 	default:
+ 		return -EINVAL;
+@@ -230,7 +232,6 @@ static int vdec_start_streaming(struct vb2_queue *q, unsigned int count)
+ 
+ 	sess->should_stop = 0;
+ 	sess->keyframe_found = 0;
+-	sess->min_buffers_eos = 0;
+ 	atomic_set(&sess->esparser_queued_bufs, 0);
+ 	ret = vdec_poweron(sess);
+ 	if (ret)
+@@ -283,7 +284,8 @@ static void vdec_stop_streaming(struct vb2_queue *q)
+ 			kthread_stop(sess->recycle_thread);
+ 		vdec_poweroff(sess);
+ 		vdec_free_canvas(sess);
+-		dma_free_coherent(sess->core->dev, sess->vififo_size, sess->vififo_vaddr, sess->vififo_paddr);
++		dma_free_coherent(sess->core->dev, sess->vififo_size,
++				  sess->vififo_vaddr, sess->vififo_paddr);
+ 		INIT_LIST_HEAD(&sess->bufs);
+ 		INIT_LIST_HEAD(&sess->bufs_recycle);
+ 		if (sess->priv) {
+@@ -433,7 +435,8 @@ static int vdec_try_fmt(struct file *file, void *fh, struct v4l2_format *f)
+ 
+ static int vdec_g_fmt(struct file *file, void *fh, struct v4l2_format *f)
+ {
+-	struct amvdec_session *sess = container_of(file->private_data, struct amvdec_session, fh);
++	struct amvdec_session *sess =
++		container_of(file->private_data, struct amvdec_session, fh);
+ 	struct v4l2_pix_format_mplane *pixmp = &f->fmt.pix_mp;
+ 
+ 	if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE)
+@@ -460,7 +463,8 @@ static int vdec_g_fmt(struct file *file, void *fh, struct v4l2_format *f)
+ 
+ static int vdec_s_fmt(struct file *file, void *fh, struct v4l2_format *f)
+ {
+-	struct amvdec_session *sess = container_of(file->private_data, struct amvdec_session, fh);
++	struct amvdec_session *sess =
++		container_of(file->private_data, struct amvdec_session, fh);
+ 	struct v4l2_pix_format_mplane *pixmp = &f->fmt.pix_mp;
+ 	u32 num_formats = sess->core->platform->num_formats;
+ 	const struct amvdec_format *fmt_out;
+@@ -806,7 +810,8 @@ static void vdec_rm_first_ts(struct amvdec_session *sess)
+ 	spin_unlock_irqrestore(&sess->bufs_spinlock, flags);
+ }
+ 
+-void amvdec_dst_buf_done(struct amvdec_session *sess, struct vb2_v4l2_buffer *vbuf, u32 field)
++void amvdec_dst_buf_done(struct amvdec_session *sess,
++			 struct vb2_v4l2_buffer *vbuf, u32 field)
+ {
+ 	struct device *dev = sess->core->dev_dec;
+ 	struct amvdec_timestamp *tmp;
+@@ -868,7 +873,8 @@ void amvdec_dst_buf_done(struct amvdec_session *sess, struct vb2_v4l2_buffer *vb
+ }
+ EXPORT_SYMBOL_GPL(amvdec_dst_buf_done);
+ 
+-void amvdec_dst_buf_done_idx(struct amvdec_session *sess, u32 buf_idx, u32 field)
++void
++amvdec_dst_buf_done_idx(struct amvdec_session *sess, u32 buf_idx, u32 field)
+ {
+ 	struct vb2_v4l2_buffer *vbuf;
+ 	struct device *dev = sess->core->dev_dec;
+-- 
+2.7.4
+

@@ -1,0 +1,793 @@
+From c114a68bd5cf1039bc4bfe9d0f36ad19a3f08c20 Mon Sep 17 00:00:00 2001
+From: Maxime Jourdan <mjourdan@baylibre.com>
+Date: Thu, 23 Aug 2018 17:26:14 +0200
+Subject: [PATCH 28/35] Switch to the new canvas module
+
+This drops the canvas.c/h files and use the canvas module that is in the
+process of mainlining.
+
+branch was rebased against 4.18/canvas-rework-v3v2
+
+Hopefully it doesn't break anything .. Was only lightly
+tested with a few samples.
+---
+ arch/arm64/boot/dts/amlogic/meson-gx.dtsi         |   8 +-
+ drivers/media/platform/Kconfig                    |   1 +
+ drivers/media/platform/meson/vdec/Makefile        |   2 +-
+ drivers/media/platform/meson/vdec/canvas.c        |  69 --------
+ drivers/media/platform/meson/vdec/canvas.h        |  42 -----
+ drivers/media/platform/meson/vdec/codec_h264.c    |   4 +-
+ drivers/media/platform/meson/vdec/codec_helpers.c | 204 +++++++++++++---------
+ drivers/media/platform/meson/vdec/codec_helpers.h |  11 +-
+ drivers/media/platform/meson/vdec/codec_hevc.c    |   1 -
+ drivers/media/platform/meson/vdec/codec_mjpeg.c   |   3 +-
+ drivers/media/platform/meson/vdec/codec_mpeg12.c  |   4 +-
+ drivers/media/platform/meson/vdec/codec_mpeg4.c   |  44 +----
+ drivers/media/platform/meson/vdec/vdec.c          |  23 ++-
+ drivers/media/platform/meson/vdec/vdec.h          |  11 +-
+ drivers/media/platform/meson/vdec/vdec_platform.c |  18 +-
+ 15 files changed, 184 insertions(+), 261 deletions(-)
+ delete mode 100644 drivers/media/platform/meson/vdec/canvas.c
+ delete mode 100644 drivers/media/platform/meson/vdec/canvas.h
+
+diff --git a/arch/arm64/boot/dts/amlogic/meson-gx.dtsi b/arch/arm64/boot/dts/amlogic/meson-gx.dtsi
+index 3bbfa6b..0e2f8c0 100644
+--- a/arch/arm64/boot/dts/amlogic/meson-gx.dtsi
++++ b/arch/arm64/boot/dts/amlogic/meson-gx.dtsi
+@@ -498,16 +498,16 @@
+ 
+ 		vdec: video-decoder@0xd0050000 {
+ 			compatible = "amlogic,gx-vdec";
+-			reg = <0x0 0xc8820000 0x0 0x10000
+-			       0x0 0xc110a580 0x0 0xe4
+-			       0x0 0xc8838000 0x0 0x60>;
+-			reg-names = "dos", "esparser", "dmc";
++			reg = <0x0 0xc8820000 0x0 0x10000>,
++			      <0x0 0xc110a580 0x0 0xe4>;
++			reg-names = "dos", "esparser";
+ 
+ 			interrupts = <GIC_SPI 44 IRQ_TYPE_EDGE_RISING
+ 				      GIC_SPI 32 IRQ_TYPE_EDGE_RISING>;
+ 			interrupt-names = "vdec", "esparser";
+ 
+ 			amlogic,ao-sysctrl = <&sysctrl_AO>;
++			amlogic,canvas = <&canvas>;
+ 		};
+ 
+ 		vpu: vpu@d0100000 {
+diff --git a/drivers/media/platform/Kconfig b/drivers/media/platform/Kconfig
+index 42d600b..5cb9a8a 100644
+--- a/drivers/media/platform/Kconfig
++++ b/drivers/media/platform/Kconfig
+@@ -488,6 +488,7 @@ config VIDEO_AML_MESON_VDEC
+ 	depends on (ARCH_MESON) || COMPILE_TEST
+ 	select VIDEOBUF2_DMA_CONTIG
+ 	select V4L2_MEM2MEM_DEV
++	select MESON_CANVAS
+ 	---help---
+ 	Support for the video decoder found in gxbb/gxl/gxm chips.
+ 	Can decode MPEG 1/2/4, H.264, MJPEG, HEVC 8-bit.
+diff --git a/drivers/media/platform/meson/vdec/Makefile b/drivers/media/platform/meson/vdec/Makefile
+index 9f506bc..0e9f5d1 100644
+--- a/drivers/media/platform/meson/vdec/Makefile
++++ b/drivers/media/platform/meson/vdec/Makefile
+@@ -1,7 +1,7 @@
+ # SPDX-License-Identifier: GPL-2.0
+ # Makefile for AMLogic meson video decoder driver
+ 
+-meson-vdec-objs += vdec.o vdec_1.o vdec_hevc.o esparser.o canvas.o codec_helpers.o codec_mpeg12.o codec_h264.o codec_hevc.o vdec_platform.o codec_mpeg4.o codec_mjpeg.o
++meson-vdec-objs += vdec.o vdec_1.o vdec_hevc.o esparser.o codec_helpers.o codec_mpeg12.o codec_h264.o codec_hevc.o vdec_platform.o codec_mpeg4.o codec_mjpeg.o
+ 
+ obj-$(CONFIG_VIDEO_AML_MESON_VDEC) += meson-vdec.o
+ 
+diff --git a/drivers/media/platform/meson/vdec/canvas.c b/drivers/media/platform/meson/vdec/canvas.c
+deleted file mode 100644
+index bd3c215..0000000
+--- a/drivers/media/platform/meson/vdec/canvas.c
++++ /dev/null
+@@ -1,69 +0,0 @@
+-/*
+- * Copyright (C) 2016 BayLibre, SAS
+- * Author: Neil Armstrong <narmstrong@baylibre.com>
+- * Copyright (C) 2015 Amlogic, Inc. All rights reserved.
+- * Copyright (C) 2014 Endless Mobile
+- *
+- * This program is free software; you can redistribute it and/or
+- * modify it under the terms of the GNU General Public License as
+- * published by the Free Software Foundation; either version 2 of the
+- * License, or (at your option) any later version.
+- *
+- * This program is distributed in the hope that it will be useful, but
+- * WITHOUT ANY WARRANTY; without even the implied warranty of
+- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+- * General Public License for more details.
+- *
+- * You should have received a copy of the GNU General Public License
+- * along with this program; if not, see <http://www.gnu.org/licenses/>.
+- */
+-
+-#include <linux/kernel.h>
+-#include <linux/module.h>
+-#include <asm/io.h>
+-#include "canvas.h"
+-
+-/* XXX: There is already a canvas implementation in the DRM subsystem but it's
+- * tied to it. This one is almost entirely copied from it.
+- * We should have a generic canvas provider for meson.
+- */
+-
+-/**
+- * DOC: Canvas
+- *
+- * CANVAS is a memory zone where physical memory frames information
+- * are stored for the VIU to scanout.
+- */
+-
+-/* DMC Registers */
+-#define DMC_CAV_LUT_DATAL	0x48 /* 0x12 offset in data sheet */
+-#define CANVAS_WIDTH_LBIT	29
+-#define CANVAS_WIDTH_LWID       3
+-#define DMC_CAV_LUT_DATAH	0x4c /* 0x13 offset in data sheet */
+-#define CANVAS_WIDTH_HBIT       0
+-#define CANVAS_HEIGHT_BIT       9
+-#define CANVAS_BLKMODE_BIT      24
+-#define DMC_CAV_LUT_ADDR	0x50 /* 0x14 offset in data sheet */
+-#define CANVAS_LUT_WR_EN        BIT(9)
+-#define CANVAS_LUT_RD_EN        BIT(8)
+-
+-void vdec_canvas_setup(void __iomem *dmc_base,
+-			uint32_t canvas_index, uint32_t addr,
+-			uint32_t stride, uint32_t height,
+-			unsigned int wrap,
+-			unsigned int blkmode)
+-{
+-	writel_relaxed((((addr + 7) >> 3)) |
+-		(((stride + 7) >> 3) << CANVAS_WIDTH_LBIT), dmc_base + DMC_CAV_LUT_DATAL);
+-
+-	writel_relaxed(((((stride + 7) >> 3) >> CANVAS_WIDTH_LWID) <<
+-						CANVAS_WIDTH_HBIT) |
+-		(height << CANVAS_HEIGHT_BIT) |
+-		(wrap << 22) |
+-		(blkmode << CANVAS_BLKMODE_BIT) | (7 << 26), dmc_base + DMC_CAV_LUT_DATAH);
+-
+-	writel_relaxed(CANVAS_LUT_WR_EN | canvas_index, dmc_base + DMC_CAV_LUT_ADDR);
+-
+-	/* Force a read-back to make sure everything is flushed. */
+-	readl_relaxed(dmc_base + DMC_CAV_LUT_DATAH);
+-}
+diff --git a/drivers/media/platform/meson/vdec/canvas.h b/drivers/media/platform/meson/vdec/canvas.h
+deleted file mode 100644
+index b8b5409..0000000
+--- a/drivers/media/platform/meson/vdec/canvas.h
++++ /dev/null
+@@ -1,42 +0,0 @@
+-/*
+- * Copyright (C) 2016 BayLibre, SAS
+- * Author: Neil Armstrong <narmstrong@baylibre.com>
+- * Copyright (C) 2014 Endless Mobile
+- *
+- * This program is free software; you can redistribute it and/or
+- * modify it under the terms of the GNU General Public License as
+- * published by the Free Software Foundation; either version 2 of the
+- * License, or (at your option) any later version.
+- *
+- * This program is distributed in the hope that it will be useful, but
+- * WITHOUT ANY WARRANTY; without even the implied warranty of
+- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+- * General Public License for more details.
+- *
+- * You should have received a copy of the GNU General Public License
+- * along with this program; if not, see <http://www.gnu.org/licenses/>.
+- */
+-
+-/* Canvas LUT Memory */
+-
+-#ifndef __MESON_CANVAS_H
+-#define __MESON_CANVAS_H
+-
+-#define MESON_CANVAS_ID_OSD1	0x4e
+-
+-/* Canvas configuration. */
+-#define MESON_CANVAS_WRAP_NONE	0x00
+-#define	MESON_CANVAS_WRAP_X	0x01
+-#define	MESON_CANVAS_WRAP_Y	0x02
+-
+-#define	MESON_CANVAS_BLKMODE_LINEAR	0x00
+-#define	MESON_CANVAS_BLKMODE_32x32	0x01
+-#define	MESON_CANVAS_BLKMODE_64x64	0x02
+-
+-void vdec_canvas_setup(void __iomem *dmc_base,
+-			uint32_t canvas_index, uint32_t addr,
+-			uint32_t stride, uint32_t height,
+-			unsigned int wrap,
+-			unsigned int blkmode);
+-
+-#endif /* __MESON_CANVAS_H */
+diff --git a/drivers/media/platform/meson/vdec/codec_h264.c b/drivers/media/platform/meson/vdec/codec_h264.c
+index b8589ce..445a3fe 100644
+--- a/drivers/media/platform/meson/vdec/codec_h264.c
++++ b/drivers/media/platform/meson/vdec/codec_h264.c
+@@ -8,7 +8,6 @@
+ 
+ #include "codec_h264.h"
+ #include "codec_helpers.h"
+-#include "canvas.h"
+ #include "dos_regs.h"
+ 
+ #define SIZE_EXT_FW	(20 * SZ_1K)
+@@ -213,7 +212,8 @@ static void codec_h264_set_param(struct amvdec_session *sess) {
+ 	mb_height = ALIGN(mb_height, 4);
+ 	mb_total = mb_width * mb_height;
+ 
+-	amcodec_helper_set_canvases(sess, core->dos_base + ANC0_CANVAS_ADDR);
++	amcodec_helper_set_canvases(sess, (u32[]){ ANC0_CANVAS_ADDR, 0 },
++				    (u32[]){ 24, 0 });
+ 
+ 	if (max_reference_size > max_dpb_size)
+ 		max_dpb_size = max_reference_size;
+diff --git a/drivers/media/platform/meson/vdec/codec_helpers.c b/drivers/media/platform/meson/vdec/codec_helpers.c
+index 6296c18..14df767 100644
+--- a/drivers/media/platform/meson/vdec/codec_helpers.c
++++ b/drivers/media/platform/meson/vdec/codec_helpers.c
+@@ -7,7 +7,9 @@
+ #include <media/videobuf2-dma-contig.h>
+ 
+ #include "codec_helpers.h"
+-#include "canvas.h"
++
++#define NUM_CANVAS_NV12 2
++#define NUM_CANVAS_YUV420 3
+ 
+ /* 4 KiB per 64x32 block */
+ u32 amcodec_am21c_body_size(u32 width, u32 height)
+@@ -36,99 +38,141 @@ u32 amcodec_am21c_size(u32 width, u32 height)
+ }
+ EXPORT_SYMBOL_GPL(amcodec_am21c_size);
+ 
+-static void
+-codec_helper_set_canvas_yuv420m(struct amvdec_session *sess, void *reg_base)
++static int amvdec_alloc_canvas(struct amvdec_session *sess, u8 *canvas_id) {
++	int ret;
++
++	if (sess->canvas_num >= MAX_CANVAS) {
++		dev_err(sess->core->dev, "Reached max number of canvas\n");
++		return -ENOMEM;
++	}
++
++	ret = meson_canvas_alloc(sess->core->canvas, canvas_id);
++	if (ret)
++		return ret;
++
++	sess->canvas_alloc[sess->canvas_num++] = *canvas_id;
++	return 0;
++}
++
++static int codec_helper_set_canvas_yuv420m(struct amvdec_session *sess,
++					   struct vb2_buffer *vb, u32 width,
++					   u32 height, u32 reg)
+ {
+ 	struct amvdec_core *core = sess->core;
+-	u32 width = ALIGN(sess->width, 64);
+-	u32 height = ALIGN(sess->height, 64);
+-	struct v4l2_m2m_buffer *buf;
++	u8 canvas_id[NUM_CANVAS_YUV420]; // Y U/V
++	dma_addr_t buf_paddr[NUM_CANVAS_YUV420]; // Y U/V
++	int ret, i;
+ 
+-	/* Setup YUV420 canvases for Decoded Picture Buffer (dpb)
+-	 * Map them to the user buffers' planes
+-	 */
+-	v4l2_m2m_for_each_dst_buf(sess->m2m_ctx, buf) {
+-		u32 buf_idx    = buf->vb.vb2_buf.index;
+-		u32 cnv_y_idx  = 128 + buf_idx * 3;
+-		u32 cnv_u_idx = cnv_y_idx + 1;
+-		u32 cnv_v_idx = cnv_y_idx + 2;
+-		dma_addr_t buf_y_paddr  =
+-			vb2_dma_contig_plane_dma_addr(&buf->vb.vb2_buf, 0);
+-		dma_addr_t buf_u_paddr =
+-			vb2_dma_contig_plane_dma_addr(&buf->vb.vb2_buf, 1);
+-		dma_addr_t buf_v_paddr =
+-			vb2_dma_contig_plane_dma_addr(&buf->vb.vb2_buf, 2);
+-
+-		/* Y plane */
+-		vdec_canvas_setup(core->dmc_base, cnv_y_idx, buf_y_paddr,
+-			width, height, MESON_CANVAS_WRAP_NONE,
+-			MESON_CANVAS_BLKMODE_LINEAR);
+-
+-		/* U plane */
+-		vdec_canvas_setup(core->dmc_base, cnv_u_idx, buf_u_paddr,
+-			width / 2, height / 2, MESON_CANVAS_WRAP_NONE,
+-			MESON_CANVAS_BLKMODE_LINEAR);
+-
+-		/* V plane */
+-		vdec_canvas_setup(core->dmc_base, cnv_v_idx, buf_v_paddr,
+-			width / 2, height / 2, MESON_CANVAS_WRAP_NONE,
+-			MESON_CANVAS_BLKMODE_LINEAR);
+-
+-		writel_relaxed(((cnv_v_idx) << 16) |
+-			       ((cnv_u_idx) << 8)  |
+-				(cnv_y_idx), reg_base + buf_idx * 4);
++	for (i = 0; i < NUM_CANVAS_YUV420; ++i) {
++		ret = amvdec_alloc_canvas(sess, &canvas_id[i]);
++		if (ret)
++			return ret;
++
++		buf_paddr[i] =
++		    vb2_dma_contig_plane_dma_addr(vb, i);
+ 	}
++
++	/* Y plane */
++	meson_canvas_config(core->canvas, canvas_id[0], buf_paddr[0],
++		width, height, MESON_CANVAS_WRAP_NONE,
++		MESON_CANVAS_BLKMODE_LINEAR,
++		MESON_CANVAS_ENDIAN_SWAP64);
++
++	/* U plane */
++	meson_canvas_config(core->canvas, canvas_id[1], buf_paddr[1],
++		width / 2, height / 2, MESON_CANVAS_WRAP_NONE,
++		MESON_CANVAS_BLKMODE_LINEAR,
++		MESON_CANVAS_ENDIAN_SWAP64);
++
++	/* V plane */
++	meson_canvas_config(core->canvas, canvas_id[2], buf_paddr[2],
++		width / 2, height / 2, MESON_CANVAS_WRAP_NONE,
++		MESON_CANVAS_BLKMODE_LINEAR,
++		MESON_CANVAS_ENDIAN_SWAP64);
++
++	amvdec_write_dos(core, reg,
++			 ((canvas_id[2]) << 16) |
++			 ((canvas_id[1]) << 8)  |
++			 (canvas_id[0]));
++
++	return 0;
+ }
+ 
+-static void
+-codec_helper_set_canvas_nv12m(struct amvdec_session *sess, void *reg_base)
++static int codec_helper_set_canvas_nv12m(struct amvdec_session *sess,
++					 struct vb2_buffer *vb, u32 width,
++					 u32 height, u32 reg)
+ {
+ 	struct amvdec_core *core = sess->core;
+-	u32 width = ALIGN(sess->width, 64);
+-	u32 height = ALIGN(sess->height, 64);
+-	struct v4l2_m2m_buffer *buf;
++	u8 canvas_id[NUM_CANVAS_NV12]; // Y U/V
++	dma_addr_t buf_paddr[NUM_CANVAS_NV12]; // Y U/V
++	int ret, i;
+ 
+-	/* Setup NV12 canvases for Decoded Picture Buffer (dpb)
+-	 * Map them to the user buffers' planes
+-	 */
+-	v4l2_m2m_for_each_dst_buf(sess->m2m_ctx, buf) {
+-		u32 buf_idx    = buf->vb.vb2_buf.index;
+-		u32 cnv_y_idx  = 128 + buf_idx * 2;
+-		u32 cnv_uv_idx = cnv_y_idx + 1;
+-		dma_addr_t buf_y_paddr  =
+-			vb2_dma_contig_plane_dma_addr(&buf->vb.vb2_buf, 0);
+-		dma_addr_t buf_uv_paddr =
+-			vb2_dma_contig_plane_dma_addr(&buf->vb.vb2_buf, 1);
+-
+-		/* Y plane */
+-		vdec_canvas_setup(core->dmc_base, cnv_y_idx, buf_y_paddr,
+-			width, height, MESON_CANVAS_WRAP_NONE,
+-			MESON_CANVAS_BLKMODE_LINEAR);
+-
+-		/* U/V plane */
+-		vdec_canvas_setup(core->dmc_base, cnv_uv_idx, buf_uv_paddr,
+-			width, height / 2, MESON_CANVAS_WRAP_NONE,
+-			MESON_CANVAS_BLKMODE_LINEAR);
+-
+-		writel_relaxed(((cnv_uv_idx) << 16) |
+-			       ((cnv_uv_idx) << 8)  |
+-				(cnv_y_idx), reg_base + buf_idx * 4);
++	for (i = 0; i < NUM_CANVAS_NV12; ++i) {
++		ret = amvdec_alloc_canvas(sess, &canvas_id[i]);
++		if (ret)
++			return ret;
++
++		buf_paddr[i] =
++		    vb2_dma_contig_plane_dma_addr(vb, i);
+ 	}
++
++	/* Y plane */
++	meson_canvas_config(core->canvas, canvas_id[0], buf_paddr[0],
++		width, height, MESON_CANVAS_WRAP_NONE,
++		MESON_CANVAS_BLKMODE_LINEAR,
++		MESON_CANVAS_ENDIAN_SWAP64);
++
++	/* U/V plane */
++	meson_canvas_config(core->canvas, canvas_id[1], buf_paddr[1],
++		width, height / 2, MESON_CANVAS_WRAP_NONE,
++		MESON_CANVAS_BLKMODE_LINEAR,
++		MESON_CANVAS_ENDIAN_SWAP64);
++
++	amvdec_write_dos(core, reg,
++			 ((canvas_id[1]) << 16) |
++			 ((canvas_id[1]) << 8)  |
++			 (canvas_id[0]));
++
++	return 0;
+ }
+ 
+-void amcodec_helper_set_canvases(struct amvdec_session *sess, void *reg_base)
++int amcodec_helper_set_canvases(struct amvdec_session *sess,
++				u32 reg_base[], u32 reg_num[])
+ {
++	struct v4l2_m2m_buffer *buf;
+ 	u32 pixfmt = sess->pixfmt_cap;
++	u32 width = ALIGN(sess->width, 64);
++	u32 height = ALIGN(sess->height, 64);
++	u32 reg_cur = reg_base[0];
++	u32 reg_num_cur = 0;
++	u32 reg_base_cur = 0;
++
++	v4l2_m2m_for_each_dst_buf(sess->m2m_ctx, buf) {
++		switch (pixfmt) {
++		case V4L2_PIX_FMT_NV12M:
++			return codec_helper_set_canvas_nv12m(sess, &buf->vb.vb2_buf, width, height, reg_cur);
++			break;
++		case V4L2_PIX_FMT_YUV420M:
++			return codec_helper_set_canvas_yuv420m(sess, &buf->vb.vb2_buf, width, height, reg_cur);
++			break;
++		default:
++			dev_err(sess->core->dev, "Unsupported pixfmt %08X\n",
++				pixfmt);
++			return -EINVAL;
++		};
++
++		reg_num_cur++;
++		if (reg_num_cur >= reg_num[reg_base_cur]) {
++			reg_base_cur++;
++			reg_num_cur = 0;
++		}
++
++		if (!reg_base[reg_base_cur])
++			return -EINVAL;
++
++		reg_cur = reg_base[reg_base_cur] + reg_num_cur * 4;
++	}
+ 
+-	switch (pixfmt) {
+-	case V4L2_PIX_FMT_NV12M:
+-		codec_helper_set_canvas_nv12m(sess, reg_base);
+-		break;
+-	case V4L2_PIX_FMT_YUV420M:
+-		codec_helper_set_canvas_yuv420m(sess, reg_base);
+-		break;
+-	default:
+-		dev_err(sess->core->dev, "Unsupported pixfmt %08X\n", pixfmt);
+-	};
++	return 0;
+ }
+ EXPORT_SYMBOL_GPL(amcodec_helper_set_canvases);
+\ No newline at end of file
+diff --git a/drivers/media/platform/meson/vdec/codec_helpers.h b/drivers/media/platform/meson/vdec/codec_helpers.h
+index dd96c50..e1545d5 100644
+--- a/drivers/media/platform/meson/vdec/codec_helpers.h
++++ b/drivers/media/platform/meson/vdec/codec_helpers.h
+@@ -3,7 +3,16 @@
+ 
+ #include "vdec.h"
+ 
+-void amcodec_helper_set_canvases(struct amvdec_session *sess, void *reg_base);
++/**
++ * amcodec_helper_set_canvases() - Map VB2 buffers to canvases
++ *
++ * @sess: current session
++ * @reg_base: Registry bases of where to write the canvas indexes
++ * @reg_num: number of contiguous registers after each reg_base (including it)
++ */
++int amcodec_helper_set_canvases(struct amvdec_session *sess,
++				u32 reg_base[], u32 reg_num[]);
++
+ u32 amcodec_am21c_body_size(u32 width, u32 height);
+ u32 amcodec_am21c_head_size(u32 width, u32 height);
+ u32 amcodec_am21c_size(u32 width, u32 height);
+diff --git a/drivers/media/platform/meson/vdec/codec_hevc.c b/drivers/media/platform/meson/vdec/codec_hevc.c
+index 65f6ad0..5a9b6ee 100644
+--- a/drivers/media/platform/meson/vdec/codec_hevc.c
++++ b/drivers/media/platform/meson/vdec/codec_hevc.c
+@@ -8,7 +8,6 @@
+ #include <media/videobuf2-dma-contig.h>
+ 
+ #include "codec_hevc.h"
+-#include "canvas.h"
+ #include "dos_regs.h"
+ #include "hevc_regs.h"
+ #include "codec_helpers.h"
+diff --git a/drivers/media/platform/meson/vdec/codec_mjpeg.c b/drivers/media/platform/meson/vdec/codec_mjpeg.c
+index 0a9ad001..c6a8018 100644
+--- a/drivers/media/platform/meson/vdec/codec_mjpeg.c
++++ b/drivers/media/platform/meson/vdec/codec_mjpeg.c
+@@ -88,7 +88,8 @@ static int codec_mjpeg_start(struct amvdec_session *sess)
+ 	amvdec_write_dos(core, AV_SCRATCH_0, 12);
+ 	amvdec_write_dos(core, AV_SCRATCH_1, 0x031a);
+ 
+-	amcodec_helper_set_canvases(sess, core->dos_base + AV_SCRATCH_4);
++	amcodec_helper_set_canvases(sess, (u32[]){ AV_SCRATCH_4, 0 },
++				    (u32[]){ 4, 0 });
+ 	codec_mjpeg_init_scaler(core);
+ 
+ 	amvdec_write_dos(core, MREG_TO_AMRISC, 0);
+diff --git a/drivers/media/platform/meson/vdec/codec_mpeg12.c b/drivers/media/platform/meson/vdec/codec_mpeg12.c
+index 9f1a09b..bddddde 100644
+--- a/drivers/media/platform/meson/vdec/codec_mpeg12.c
++++ b/drivers/media/platform/meson/vdec/codec_mpeg12.c
+@@ -66,7 +66,9 @@ static int codec_mpeg12_start(struct amvdec_session *sess) {
+ 
+ 	amvdec_write_dos(core, POWER_CTL_VLD, BIT(4));
+ 
+-	amcodec_helper_set_canvases(sess, core->dos_base + AV_SCRATCH_0);
++	amcodec_helper_set_canvases(sess, (u32[]){ AV_SCRATCH_0, 0 },
++				    (u32[]){ 8, 0 });
++
+ 	amvdec_write_dos(core, MREG_CO_MV_START,
+ 			 mpeg12->workspace_paddr + SIZE_CCBUF);
+ 
+diff --git a/drivers/media/platform/meson/vdec/codec_mpeg4.c b/drivers/media/platform/meson/vdec/codec_mpeg4.c
+index 0d3cf7d..a76d535 100644
+--- a/drivers/media/platform/meson/vdec/codec_mpeg4.c
++++ b/drivers/media/platform/meson/vdec/codec_mpeg4.c
+@@ -8,7 +8,6 @@
+ 
+ #include "codec_mpeg4.h"
+ #include "codec_helpers.h"
+-#include "canvas.h"
+ #include "dos_regs.h"
+ 
+ #define SIZE_WORKSPACE		SZ_1M
+@@ -44,45 +43,6 @@ static void codec_mpeg4_recycle(struct amvdec_core *core, u32 buf_idx)
+ 	amvdec_write_dos(core, MREG_BUFFERIN, ~(1 << buf_idx));
+ }
+ 
+-/* The MPEG4 canvas regs are not contiguous,
+- * handle it specifically instead of using the helper
+- * AV_SCRATCH_0 - AV_SCRATCH_3  ;  AV_SCRATCH_G - AV_SCRATCH_J
+- */
+-void codec_mpeg4_set_canvases(struct amvdec_session *sess) {
+-	struct v4l2_m2m_buffer *buf;
+-	struct amvdec_core *core = sess->core;
+-	void *current_reg = core->dos_base + AV_SCRATCH_0;
+-	u32 width = ALIGN(sess->width, 64);
+-	u32 height = ALIGN(sess->height, 64);
+-
+-	/* Setup NV12 canvases for Decoded Picture Buffer (dpb)
+-	 * Map them to the user buffers' planes
+-	 */
+-	v4l2_m2m_for_each_dst_buf(sess->m2m_ctx, buf) {
+-		u32 buf_idx    = buf->vb.vb2_buf.index;
+-		u32 cnv_y_idx  = buf_idx * 2;
+-		u32 cnv_uv_idx = buf_idx * 2 + 1;
+-		dma_addr_t buf_y_paddr  =
+-			vb2_dma_contig_plane_dma_addr(&buf->vb.vb2_buf, 0);
+-		dma_addr_t buf_uv_paddr =
+-			vb2_dma_contig_plane_dma_addr(&buf->vb.vb2_buf, 1);
+-
+-		/* Y plane */
+-		vdec_canvas_setup(core->dmc_base, cnv_y_idx, buf_y_paddr, width, height, MESON_CANVAS_WRAP_NONE, MESON_CANVAS_BLKMODE_LINEAR);
+-
+-		/* U/V plane */
+-		vdec_canvas_setup(core->dmc_base, cnv_uv_idx, buf_uv_paddr, width, height / 2, MESON_CANVAS_WRAP_NONE, MESON_CANVAS_BLKMODE_LINEAR);
+-
+-		writel_relaxed(((cnv_uv_idx) << 16) |
+-			       ((cnv_uv_idx) << 8)  |
+-				(cnv_y_idx), current_reg);
+-
+-		current_reg += 4;
+-		if (current_reg == core->dos_base + AV_SCRATCH_4)
+-			current_reg = core->dos_base + AV_SCRATCH_G;
+-	}
+-}
+-
+ static int codec_mpeg4_start(struct amvdec_session *sess) {
+ 	struct amvdec_core *core = sess->core;
+ 	struct codec_mpeg4 *mpeg4 = sess->priv;
+@@ -104,7 +64,9 @@ static int codec_mpeg4_start(struct amvdec_session *sess) {
+ 		goto free_mpeg4;
+ 	}
+ 
+-	codec_mpeg4_set_canvases(sess);
++	amcodec_helper_set_canvases(sess,
++				    (u32[]){ AV_SCRATCH_0, AV_SCRATCH_G, 0 },
++				    (u32[]){ 4, 4, 0 });
+ 
+ 	amvdec_write_dos(core, MEM_OFFSET_REG,
+ 			 mpeg4->workspace_paddr - DCAC_BUFF_START_IP);
+diff --git a/drivers/media/platform/meson/vdec/vdec.c b/drivers/media/platform/meson/vdec/vdec.c
+index 8de295e..9e164ab 100644
+--- a/drivers/media/platform/meson/vdec/vdec.c
++++ b/drivers/media/platform/meson/vdec/vdec.c
+@@ -19,7 +19,6 @@
+ 
+ #include "vdec.h"
+ #include "esparser.h"
+-#include "canvas.h"
+ #include "vdec_1.h"
+ #include "codec_helpers.h"
+ 
+@@ -262,6 +261,16 @@ static int vdec_start_streaming(struct vb2_queue *q, unsigned int count)
+ 	return ret;
+ }
+ 
++static void vdec_free_canvas(struct amvdec_session *sess)
++{
++	int i;
++
++	for (i = 0; i < sess->canvas_num; ++i)
++		meson_canvas_free(sess->core->canvas, sess->canvas_alloc[i]);
++
++	sess->canvas_num = 0;
++}
++
+ static void vdec_stop_streaming(struct vb2_queue *q)
+ {
+ 	struct amvdec_session *sess = vb2_get_drv_priv(q);
+@@ -273,6 +282,7 @@ static void vdec_stop_streaming(struct vb2_queue *q)
+ 		if (vdec_codec_needs_recycle(sess))
+ 			kthread_stop(sess->recycle_thread);
+ 		vdec_poweroff(sess);
++		vdec_free_canvas(sess);
+ 		dma_free_coherent(sess->core->dev, sess->vififo_size, sess->vififo_vaddr, sess->vififo_paddr);
+ 		INIT_LIST_HEAD(&sess->bufs);
+ 		INIT_LIST_HEAD(&sess->bufs_recycle);
+@@ -1034,13 +1044,6 @@ static int vdec_probe(struct platform_device *pdev)
+ 		return PTR_ERR(core->esparser_base);
+ 	}
+ 
+-	r = platform_get_resource_byname(pdev, IORESOURCE_MEM, "dmc");
+-	core->dmc_base = devm_ioremap(dev, r->start, resource_size(r));
+-	if (IS_ERR(core->dmc_base)) {
+-		dev_err(dev, "Couldn't remap DMC memory\n");
+-		return PTR_ERR(core->dmc_base);
+-	}
+-
+ 	core->regmap_ao = syscon_regmap_lookup_by_phandle(dev->of_node,
+ 						"amlogic,ao-sysctrl");
+ 	if (IS_ERR(core->regmap_ao)) {
+@@ -1048,6 +1051,10 @@ static int vdec_probe(struct platform_device *pdev)
+ 		return PTR_ERR(core->regmap_ao);
+ 	}
+ 
++	core->canvas = meson_canvas_get(dev);
++	if (!core->canvas)
++		return PTR_ERR(core->canvas);
++
+ 	core->dos_parser_clk = devm_clk_get(dev, "dos_parser");
+ 	if (IS_ERR(core->dos_parser_clk))
+ 		return -EPROBE_DEFER;
+diff --git a/drivers/media/platform/meson/vdec/vdec.h b/drivers/media/platform/meson/vdec/vdec.h
+index 9c8455d..36690bc 100644
+--- a/drivers/media/platform/meson/vdec/vdec.h
++++ b/drivers/media/platform/meson/vdec/vdec.h
+@@ -6,11 +6,15 @@
+ #ifndef __MESON_VDEC_CORE_H_
+ #define __MESON_VDEC_CORE_H_
+ 
++/* 32 buffers in 3-plane YUV420 */
++#define MAX_CANVAS (32 * 3)
++
+ #include <linux/regmap.h>
+ #include <linux/list.h>
+ #include <media/videobuf2-v4l2.h>
+ #include <media/v4l2-ctrls.h>
+ #include <media/v4l2-device.h>
++#include <linux/soc/amlogic/meson-canvas.h>
+ 
+ #include "vdec_platform.h"
+ 
+@@ -34,13 +38,14 @@ struct amvdec_session;
+ struct amvdec_core {
+ 	void __iomem *dos_base;
+ 	void __iomem *esparser_base;
+-	void __iomem *dmc_base;
+ 	struct regmap *regmap_ao;
+ 
+ 	struct device *dev;
+ 	struct device *dev_dec;
+ 	const struct vdec_platform *platform;
+ 
++	struct meson_canvas *canvas;
++
+ 	struct clk *dos_parser_clk;
+ 	struct clk *dos_clk;
+ 	struct clk *vdec_1_clk;
+@@ -131,6 +136,10 @@ struct amvdec_session {
+ 	/* Is set to 1 once the first keyframe has been parsed */
+ 	unsigned int keyframe_found;
+ 
++	/* Allocated canvas */
++	u8 canvas_alloc[MAX_CANVAS];
++	u32 canvas_num;
++
+ 	/* Big contiguous area for the VIFIFO */
+ 	void *vififo_vaddr;
+ 	dma_addr_t vififo_paddr;
+diff --git a/drivers/media/platform/meson/vdec/vdec_platform.c b/drivers/media/platform/meson/vdec/vdec_platform.c
+index ad59e33..c3fd85c 100644
+--- a/drivers/media/platform/meson/vdec/vdec_platform.c
++++ b/drivers/media/platform/meson/vdec/vdec_platform.c
+@@ -64,7 +64,7 @@ static const struct amvdec_format vdec_formats_gxbb[] = {
+ 		.vdec_ops = &vdec_1_ops,
+ 		.codec_ops = &codec_mpeg4_ops,
+ 		.firmware_path = "meson/gx/vmpeg4_mc_5",
+-		.pixfmts_cap = { V4L2_PIX_FMT_NV12M, 0 },
++		.pixfmts_cap = { V4L2_PIX_FMT_NV12M, V4L2_PIX_FMT_YUV420M, 0 },
+ 	}, {
+ 		.pixfmt = V4L2_PIX_FMT_H263,
+ 		.min_buffers = 8,
+@@ -74,7 +74,7 @@ static const struct amvdec_format vdec_formats_gxbb[] = {
+ 		.vdec_ops = &vdec_1_ops,
+ 		.codec_ops = &codec_mpeg4_ops,
+ 		.firmware_path = "meson/gx/h263_mc",
+-		.pixfmts_cap = { V4L2_PIX_FMT_NV12M, 0 },
++		.pixfmts_cap = { V4L2_PIX_FMT_NV12M, V4L2_PIX_FMT_YUV420M, 0 },
+ 	}, {
+ 		.pixfmt = V4L2_PIX_FMT_XVID,
+ 		.min_buffers = 8,
+@@ -84,7 +84,7 @@ static const struct amvdec_format vdec_formats_gxbb[] = {
+ 		.vdec_ops = &vdec_1_ops,
+ 		.codec_ops = &codec_mpeg4_ops,
+ 		.firmware_path = "meson/gx/vmpeg4_mc_5",
+-		.pixfmts_cap = { V4L2_PIX_FMT_NV12M, 0 },
++		.pixfmts_cap = { V4L2_PIX_FMT_NV12M, V4L2_PIX_FMT_YUV420M, 0 },
+ 	}, {
+ 		.pixfmt = V4L2_PIX_FMT_MJPEG,
+ 		.min_buffers = 4,
+@@ -148,7 +148,7 @@ static const struct amvdec_format vdec_formats_gxl[] = {
+ 		.vdec_ops = &vdec_1_ops,
+ 		.codec_ops = &codec_mpeg4_ops,
+ 		.firmware_path = "meson/gx/vmpeg4_mc_5",
+-		.pixfmts_cap = { V4L2_PIX_FMT_NV12M, 0 },
++		.pixfmts_cap = { V4L2_PIX_FMT_NV12M, V4L2_PIX_FMT_YUV420M, 0 },
+ 	}, {
+ 		.pixfmt = V4L2_PIX_FMT_H263,
+ 		.min_buffers = 8,
+@@ -158,7 +158,7 @@ static const struct amvdec_format vdec_formats_gxl[] = {
+ 		.vdec_ops = &vdec_1_ops,
+ 		.codec_ops = &codec_mpeg4_ops,
+ 		.firmware_path = "meson/gx/h263_mc",
+-		.pixfmts_cap = { V4L2_PIX_FMT_NV12M, 0 },
++		.pixfmts_cap = { V4L2_PIX_FMT_NV12M, V4L2_PIX_FMT_YUV420M, 0 },
+ 	}, {
+ 		.pixfmt = V4L2_PIX_FMT_XVID,
+ 		.min_buffers = 8,
+@@ -168,7 +168,7 @@ static const struct amvdec_format vdec_formats_gxl[] = {
+ 		.vdec_ops = &vdec_1_ops,
+ 		.codec_ops = &codec_mpeg4_ops,
+ 		.firmware_path = "meson/gx/vmpeg4_mc_5",
+-		.pixfmts_cap = { V4L2_PIX_FMT_NV12M, 0 },
++		.pixfmts_cap = { V4L2_PIX_FMT_NV12M, V4L2_PIX_FMT_YUV420M, 0 },
+ 	}, {
+ 		.pixfmt = V4L2_PIX_FMT_MJPEG,
+ 		.min_buffers = 4,
+@@ -232,7 +232,7 @@ static const struct amvdec_format vdec_formats_gxm[] = {
+ 		.vdec_ops = &vdec_1_ops,
+ 		.codec_ops = &codec_mpeg4_ops,
+ 		.firmware_path = "meson/gx/vmpeg4_mc_5",
+-		.pixfmts_cap = { V4L2_PIX_FMT_NV12M, 0 },
++		.pixfmts_cap = { V4L2_PIX_FMT_NV12M, V4L2_PIX_FMT_YUV420M, 0 },
+ 	}, {
+ 		.pixfmt = V4L2_PIX_FMT_H263,
+ 		.min_buffers = 8,
+@@ -242,7 +242,7 @@ static const struct amvdec_format vdec_formats_gxm[] = {
+ 		.vdec_ops = &vdec_1_ops,
+ 		.codec_ops = &codec_mpeg4_ops,
+ 		.firmware_path = "meson/gx/h263_mc",
+-		.pixfmts_cap = { V4L2_PIX_FMT_NV12M, 0 },
++		.pixfmts_cap = { V4L2_PIX_FMT_NV12M, V4L2_PIX_FMT_YUV420M, 0 },
+ 	}, {
+ 		.pixfmt = V4L2_PIX_FMT_XVID,
+ 		.min_buffers = 8,
+@@ -252,7 +252,7 @@ static const struct amvdec_format vdec_formats_gxm[] = {
+ 		.vdec_ops = &vdec_1_ops,
+ 		.codec_ops = &codec_mpeg4_ops,
+ 		.firmware_path = "meson/gx/vmpeg4_mc_5",
+-		.pixfmts_cap = { V4L2_PIX_FMT_NV12M, 0 },
++		.pixfmts_cap = { V4L2_PIX_FMT_NV12M, V4L2_PIX_FMT_YUV420M, 0 },
+ 	}, {
+ 		.pixfmt = V4L2_PIX_FMT_MJPEG,
+ 		.min_buffers = 4,
+-- 
+2.7.4
+

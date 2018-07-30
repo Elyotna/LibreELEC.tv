@@ -1,0 +1,425 @@
+From 74c30f3d9c869f4527ea2add50d775e0540a906b Mon Sep 17 00:00:00 2001
+From: Maxime Jourdan <maxi.jourdan@wanadoo.fr>
+Date: Thu, 16 Aug 2018 04:49:16 +0200
+Subject: [PATCH 12/35] Move DOS registers to a single header file
+
+---
+ drivers/media/platform/meson/vdec/codec_h264.c   | 37 +----------
+ drivers/media/platform/meson/vdec/codec_hevc.c   | 10 +--
+ drivers/media/platform/meson/vdec/codec_mjpeg.c  | 28 ++-------
+ drivers/media/platform/meson/vdec/codec_mpeg12.c | 42 +++++--------
+ drivers/media/platform/meson/vdec/codec_mpeg4.c  | 39 ++++--------
+ drivers/media/platform/meson/vdec/dos_regs.h     | 80 ++++++++++++++++++++++++
+ drivers/media/platform/meson/vdec/vdec_1.c       | 31 +--------
+ drivers/media/platform/meson/vdec/vdec_hevc.c    | 10 +--
+ 8 files changed, 119 insertions(+), 158 deletions(-)
+ create mode 100644 drivers/media/platform/meson/vdec/dos_regs.h
+
+diff --git a/drivers/media/platform/meson/vdec/codec_h264.c b/drivers/media/platform/meson/vdec/codec_h264.c
+index bb5a711..24deb43 100644
+--- a/drivers/media/platform/meson/vdec/codec_h264.c
++++ b/drivers/media/platform/meson/vdec/codec_h264.c
+@@ -9,6 +9,7 @@
+ #include "codec_h264.h"
+ #include "codec_helpers.h"
+ #include "canvas.h"
++#include "dos_regs.h"
+ 
+ #define SIZE_EXT_FW	(20 * SZ_1K)
+ #define SIZE_WORKSPACE	0x1ee000
+@@ -19,41 +20,7 @@
+  */
+ #define WORKSPACE_BUF_OFFSET	0x1000000
+ 
+-/* DOS registers */
+-#define ASSIST_MBOX1_CLR_REG	0x01d4
+-#define ASSIST_MBOX1_MASK	0x01d8
+-
+-#define LMEM_DMA_CTRL		0x0d40
+-
+-#define PSCALE_CTRL		0x2444
+-
+-#define MDEC_PIC_DC_CTRL	0x2638
+-#define ANC0_CANVAS_ADDR	0x2640
+-#define MDEC_PIC_DC_THRESH	0x26e0
+-
+-#define AV_SCRATCH_0		0x2700
+-#define AV_SCRATCH_1		0x2704
+-#define AV_SCRATCH_2		0x2708
+-#define AV_SCRATCH_3		0x270c
+-#define AV_SCRATCH_4		0x2710
+-#define AV_SCRATCH_5		0x2714
+-#define AV_SCRATCH_6		0x2718
+-#define AV_SCRATCH_7		0x271c
+-#define AV_SCRATCH_8		0x2720
+-#define AV_SCRATCH_9		0x2724
+-#define AV_SCRATCH_D		0x2734
+-#define AV_SCRATCH_F		0x273c
+-#define AV_SCRATCH_G		0x2740
+-#define AV_SCRATCH_H		0x2744
+-#define AV_SCRATCH_I		0x2748
+-#define AV_SCRATCH_J		0x274c
+-	#define SEI_DATA_READY BIT(15)
+-
+-#define POWER_CTL_VLD		0x3020
+-
+-#define DCAC_DMA_CTRL		0x3848
+-
+-#define DOS_SW_RESET0		0xfc00
++#define SEI_DATA_READY BIT(15)
+ 
+ /* ISR status */
+ #define CMD_SET_PARAM		1
+diff --git a/drivers/media/platform/meson/vdec/codec_hevc.c b/drivers/media/platform/meson/vdec/codec_hevc.c
+index ffd5617..391c596 100644
+--- a/drivers/media/platform/meson/vdec/codec_hevc.c
++++ b/drivers/media/platform/meson/vdec/codec_hevc.c
+@@ -9,14 +9,9 @@
+ 
+ #include "codec_hevc.h"
+ #include "canvas.h"
++#include "dos_regs.h"
+ #include "hevc_regs.h"
+ 
+-/* DOS registers */
+-#define ASSIST_MBOX1_CLR_REG 0x01d4
+-#define ASSIST_MBOX1_MASK    0x01d8
+-
+-#define DOS_SW_RESET3        0xfcd0
+-
+ /* HEVC reg mapping */
+ #define HEVC_DEC_STATUS_REG	HEVC_ASSIST_SCRATCH_0
+ 	#define HEVC_ACTION_DONE	0xff
+@@ -645,7 +640,6 @@ static int codec_hevc_start(struct vdec_session *sess)
+ 	if (!hevc)
+ 		return -ENOMEM;
+ 
+-	sess->priv = hevc;
+ 	INIT_LIST_HEAD(&hevc->ref_frames_list);
+ 	hevc->curr_poc = INVALID_POC;
+ 
+@@ -724,6 +718,8 @@ static int codec_hevc_start(struct vdec_session *sess)
+ 	if (sess->fmt_cap->pixfmt != V4L2_PIX_FMT_NV12M)
+ 		codec_hevc_setup_decode_head(sess);
+ 
++	sess->priv = hevc;
++
+ 	return 0;
+ 
+ free_hevc:
+diff --git a/drivers/media/platform/meson/vdec/codec_mjpeg.c b/drivers/media/platform/meson/vdec/codec_mjpeg.c
+index 05a9a70..fcbdde2 100644
+--- a/drivers/media/platform/meson/vdec/codec_mjpeg.c
++++ b/drivers/media/platform/meson/vdec/codec_mjpeg.c
+@@ -8,30 +8,12 @@
+ 
+ #include "codec_mjpeg.h"
+ #include "codec_helpers.h"
++#include "dos_regs.h"
+ 
+-/* DOS registers */
+-#define VDEC_ASSIST_AMR1_INT8	0x00b4
+-
+-#define ASSIST_MBOX1_CLR_REG	0x01d4
+-#define ASSIST_MBOX1_MASK	0x01d8
+-
+-#define MCPU_INTR_MSK		0x0c10
+-
+-#define PSCALE_RST		0x2440
+-#define PSCALE_CTRL		0x2444
+-#define PSCALE_BMEM_ADDR	0x247c
+-#define PSCALE_BMEM_DAT		0x2480
+-
+-#define MDEC_PIC_DC_CTRL	0x2638
+-
+-#define AV_SCRATCH_0		0x2700
+-#define AV_SCRATCH_1		0x2704
+-#define MREG_DECODE_PARAM	0x2708
+-#define AV_SCRATCH_4		0x2710
+-#define MREG_TO_AMRISC		0x2720
+-#define MREG_FROM_AMRISC	0x2724
+-
+-#define DOS_SW_RESET0		0xfc00
++/* map FW registers to known MJPEG functions */
++#define MREG_DECODE_PARAM	AV_SCRATCH_2
++#define MREG_TO_AMRISC		AV_SCRATCH_8
++#define MREG_FROM_AMRISC	AV_SCRATCH_9
+ 
+ static int codec_mjpeg_can_recycle(struct vdec_core *core)
+ {
+diff --git a/drivers/media/platform/meson/vdec/codec_mpeg12.c b/drivers/media/platform/meson/vdec/codec_mpeg12.c
+index 03da456..f701531 100644
+--- a/drivers/media/platform/meson/vdec/codec_mpeg12.c
++++ b/drivers/media/platform/meson/vdec/codec_mpeg12.c
+@@ -8,38 +8,24 @@
+ 
+ #include "codec_mpeg12.h"
+ #include "codec_helpers.h"
++#include "dos_regs.h"
+ 
+ #define SIZE_WORKSPACE	(2 * SZ_64K)
+ #define SIZE_CCBUF	(5 * SZ_1K)
+ 
+-/* DOS registers */
+-#define ASSIST_MBOX1_CLR_REG 0x01d4
+-#define ASSIST_MBOX1_MASK    0x01d8
+-
+-#define PSCALE_CTRL 0x2444
+-
+-#define MDEC_PIC_DC_CTRL   0x2638
+-
+-#define AV_SCRATCH_0		0x2700
+-#define MREG_SEQ_INFO		0x2710
+-#define MREG_PIC_INFO		0x2714
+-#define MREG_PIC_WIDTH		0x2718
+-#define MREG_PIC_HEIGHT		0x271c
+-#define MREG_BUFFERIN		0x2720
+-#define MREG_BUFFEROUT		0x2724
+-#define MREG_CMD		0x2728
+-#define MREG_CO_MV_START	0x272c
+-#define MREG_ERROR_COUNT	0x2730
+-#define MREG_FRAME_OFFSET	0x2734
+-#define MREG_WAIT_BUFFER	0x2738
+-#define MREG_FATAL_ERROR	0x273c
+-
+-#define MPEG1_2_REG	0x3004
+-#define PIC_HEAD_INFO	0x300c
+-#define POWER_CTL_VLD	0x3020
+-#define M4_CONTROL_REG	0x30a4
+-
+-#define DOS_SW_RESET0 0xfc00
++/* map FW registers to known MPEG1/2 functions */
++#define MREG_SEQ_INFO		AV_SCRATCH_4
++#define MREG_PIC_INFO		AV_SCRATCH_5
++#define MREG_PIC_WIDTH		AV_SCRATCH_6
++#define MREG_PIC_HEIGHT		AV_SCRATCH_7
++#define MREG_BUFFERIN		AV_SCRATCH_8
++#define MREG_BUFFEROUT		AV_SCRATCH_9
++#define MREG_CMD		AV_SCRATCH_A
++#define MREG_CO_MV_START	AV_SCRATCH_B
++#define MREG_ERROR_COUNT	AV_SCRATCH_C
++#define MREG_FRAME_OFFSET	AV_SCRATCH_D
++#define MREG_WAIT_BUFFER	AV_SCRATCH_E
++#define MREG_FATAL_ERROR	AV_SCRATCH_F
+ 
+ struct codec_mpeg12 {
+ 	/* Buffer for the MPEG1/2 Workspace */
+diff --git a/drivers/media/platform/meson/vdec/codec_mpeg4.c b/drivers/media/platform/meson/vdec/codec_mpeg4.c
+index d4dfa6f..bf9d26b 100644
+--- a/drivers/media/platform/meson/vdec/codec_mpeg4.c
++++ b/drivers/media/platform/meson/vdec/codec_mpeg4.c
+@@ -9,36 +9,23 @@
+ #include "codec_mpeg4.h"
+ #include "codec_helpers.h"
+ #include "canvas.h"
++#include "dos_regs.h"
+ 
+ #define SIZE_WORKSPACE		SZ_1M
+ #define DCAC_BUFF_START_IP	0x02b00000
+ 
+-/* DOS registers */
+-#define ASSIST_MBOX1_CLR_REG 0x01d4
+-#define ASSIST_MBOX1_MASK    0x01d8
+-
+-#define PSCALE_CTRL 0x2444
+-
+-#define MDEC_PIC_DC_CTRL   0x2638
+-#define MDEC_PIC_DC_THRESH 0x26e0
+-
+-#define AV_SCRATCH_0        0x2700
+-#define MP4_PIC_RATIO       0x2714
+-#define MP4_RATE            0x270c
+-#define AV_SCRATCH_4        0x2710
+-#define MP4_ERR_COUNT       0x2718
+-#define MP4_PIC_WH          0x271c
+-#define MREG_BUFFERIN       0x2720
+-#define MREG_BUFFEROUT      0x2724
+-#define MP4_NOT_CODED_CNT   0x2728
+-#define MP4_VOP_TIME_INC    0x272c
+-#define MP4_OFFSET_REG      0x2730
+-#define MP4_SYS_RATE        0x2738
+-#define MEM_OFFSET_REG      0x273c
+-#define AV_SCRATCH_G        0x2740
+-#define MREG_FATAL_ERROR    0x2754
+-
+-#define DOS_SW_RESET0 0xfc00
++/* map FW registers to known MPEG4 functions */
++#define MP4_PIC_RATIO       AV_SCRATCH_5
++#define MP4_ERR_COUNT       AV_SCRATCH_6
++#define MP4_PIC_WH          AV_SCRATCH_7
++#define MREG_BUFFERIN       AV_SCRATCH_8
++#define MREG_BUFFEROUT      AV_SCRATCH_9
++#define MP4_NOT_CODED_CNT   AV_SCRATCH_A
++#define MP4_VOP_TIME_INC    AV_SCRATCH_B
++#define MP4_OFFSET_REG      AV_SCRATCH_C
++#define MP4_SYS_RATE        AV_SCRATCH_E
++#define MEM_OFFSET_REG      AV_SCRATCH_F
++#define MREG_FATAL_ERROR    AV_SCRATCH_L
+ 
+ struct codec_mpeg4 {
+ 	/* Buffer for the MPEG4 Workspace */
+diff --git a/drivers/media/platform/meson/vdec/dos_regs.h b/drivers/media/platform/meson/vdec/dos_regs.h
+new file mode 100644
+index 0000000..1c0491a
+--- /dev/null
++++ b/drivers/media/platform/meson/vdec/dos_regs.h
+@@ -0,0 +1,80 @@
++/* SPDX-License-Identifier: GPL-2.0+ */
++/*
++ * Copyright (C) 2018 Maxime Jourdan <maxi.jourdan@wanadoo.fr>
++ */
++
++#ifndef __MESON_VDEC_DOS_REGS_H_
++#define __MESON_VDEC_DOS_REGS_H_
++
++/* DOS registers */
++#define VDEC_ASSIST_AMR1_INT8	0x00b4
++
++#define ASSIST_MBOX1_CLR_REG	0x01d4
++#define ASSIST_MBOX1_MASK	0x01d8
++
++#define MPSR			0x0c04
++#define MCPU_INTR_MSK		0x0c10
++#define CPSR			0x0c84
++
++#define IMEM_DMA_CTRL		0x0d00
++#define IMEM_DMA_ADR		0x0d04
++#define IMEM_DMA_COUNT		0x0d08
++#define LMEM_DMA_CTRL		0x0d40
++
++#define MC_STATUS0		0x2424
++#define MC_CTRL1		0x242c
++
++#define PSCALE_RST		0x2440
++#define PSCALE_CTRL		0x2444
++#define PSCALE_BMEM_ADDR	0x247c
++#define PSCALE_BMEM_DAT		0x2480
++
++#define DBLK_CTRL		0x2544
++#define DBLK_STATUS		0x254c
++
++#define GCLK_EN			0x260c
++#define MDEC_PIC_DC_CTRL	0x2638
++#define MDEC_PIC_DC_STATUS	0x263c
++#define ANC0_CANVAS_ADDR	0x2640
++#define MDEC_PIC_DC_THRESH	0x26e0
++
++#define AV_SCRATCH_0		0x2700
++#define AV_SCRATCH_1		0x2704
++#define AV_SCRATCH_2		0x2708
++#define AV_SCRATCH_3		0x270c
++#define AV_SCRATCH_4		0x2710
++#define AV_SCRATCH_5		0x2714
++#define AV_SCRATCH_6		0x2718
++#define AV_SCRATCH_7		0x271c
++#define AV_SCRATCH_8		0x2720
++#define AV_SCRATCH_9		0x2724
++#define AV_SCRATCH_A		0x2728
++#define AV_SCRATCH_B		0x272c
++#define AV_SCRATCH_C		0x2730
++#define AV_SCRATCH_D		0x2734
++#define AV_SCRATCH_E		0x2738
++#define AV_SCRATCH_F		0x273c
++#define AV_SCRATCH_G		0x2740
++#define AV_SCRATCH_H		0x2744
++#define AV_SCRATCH_I		0x2748
++#define AV_SCRATCH_J		0x274c
++#define AV_SCRATCH_K		0x2750
++#define AV_SCRATCH_L		0x2754
++
++#define MPEG1_2_REG		0x3004
++#define PIC_HEAD_INFO		0x300c
++#define POWER_CTL_VLD		0x3020
++#define M4_CONTROL_REG		0x30a4
++
++#define DCAC_DMA_CTRL		0x3848
++
++#define DOS_SW_RESET0		0xfc00
++#define DOS_GCLK_EN0		0xfc04
++#define DOS_GEN_CTRL0		0xfc08
++#define DOS_MEM_PD_VDEC		0xfcc0
++#define DOS_MEM_PD_HEVC		0xfccc
++#define DOS_SW_RESET3		0xfcd0
++#define DOS_GCLK_EN3		0xfcd4
++#define DOS_VDEC_MCRCC_STALL_CTRL	0xfd00
++
++#endif
+\ No newline at end of file
+diff --git a/drivers/media/platform/meson/vdec/vdec_1.c b/drivers/media/platform/meson/vdec/vdec_1.c
+index e221f31..acf863d 100644
+--- a/drivers/media/platform/meson/vdec/vdec_1.c
++++ b/drivers/media/platform/meson/vdec/vdec_1.c
+@@ -7,42 +7,13 @@
+ #include <linux/clk.h>
+ 
+ #include "vdec_1.h"
++#include "dos_regs.h"
+ 
+ /* AO Registers */
+ #define AO_RTI_GEN_PWR_SLEEP0	0xe8
+ #define AO_RTI_GEN_PWR_ISO0	0xec
+ 	#define GEN_PWR_VDEC_1 (BIT(3) | BIT(2))
+ 
+-/* DOS Registers */
+-#define ASSIST_MBOX1_CLR_REG 0x01d4
+-#define ASSIST_MBOX1_MASK    0x01d8
+-
+-#define MPSR 0x0c04
+-#define CPSR 0x0c84
+-
+-#define IMEM_DMA_CTRL  0x0d00
+-#define IMEM_DMA_ADR   0x0d04
+-#define IMEM_DMA_COUNT 0x0d08
+-#define LMEM_DMA_CTRL  0x0d40
+-
+-#define MC_STATUS0  0x2424
+-#define MC_CTRL1    0x242c
+-
+-#define DBLK_CTRL   0x2544
+-#define DBLK_STATUS 0x254c
+-
+-#define GCLK_EN            0x260c
+-#define MDEC_PIC_DC_CTRL   0x2638
+-#define MDEC_PIC_DC_STATUS 0x263c
+-
+-#define DCAC_DMA_CTRL 0x3848
+-
+-#define DOS_SW_RESET0             0xfc00
+-#define DOS_GCLK_EN0              0xfc04
+-#define DOS_GEN_CTRL0             0xfc08
+-#define DOS_MEM_PD_VDEC           0xfcc0
+-#define DOS_VDEC_MCRCC_STALL_CTRL 0xfd00
+-
+ /* Stream Buffer (stbuf) regs (DOS) */
+ #define POWER_CTL_VLD 0x3020
+ #define VLD_MEM_VIFIFO_START_PTR 0x3100
+diff --git a/drivers/media/platform/meson/vdec/vdec_hevc.c b/drivers/media/platform/meson/vdec/vdec_hevc.c
+index 4f6e056..95dc3be 100644
+--- a/drivers/media/platform/meson/vdec/vdec_hevc.c
++++ b/drivers/media/platform/meson/vdec/vdec_hevc.c
+@@ -8,21 +8,13 @@
+ 
+ #include "vdec_1.h"
+ #include "hevc_regs.h"
++#include "dos_regs.h"
+ 
+ /* AO Registers */
+ #define AO_RTI_GEN_PWR_SLEEP0	0xe8
+ #define AO_RTI_GEN_PWR_ISO0	0xec
+ 	#define GEN_PWR_VDEC_HEVC (BIT(7) | BIT(6))
+ 
+-/* DOS Registers */
+-#define ASSIST_MBOX1_CLR_REG 0x01d4
+-#define ASSIST_MBOX1_MASK    0x01d8
+-
+-#define DOS_GEN_CTRL0	     0xfc08
+-#define DOS_SW_RESET3        0xfcd0
+-#define DOS_MEM_PD_HEVC      0xfccc
+-#define DOS_GCLK_EN3	     0xfcd4
+-
+ #define MC_SIZE	(4096 * 4)
+ 
+ static int vdec_hevc_load_firmware(struct vdec_session *sess, const char* fwname)
+-- 
+2.7.4
+

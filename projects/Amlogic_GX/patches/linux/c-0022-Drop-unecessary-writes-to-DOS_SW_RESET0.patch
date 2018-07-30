@@ -1,0 +1,134 @@
+From 975575a84a1d1cc12e084f110a95fe3ec55696ca Mon Sep 17 00:00:00 2001
+From: Maxime Jourdan <maxi.jourdan@wanadoo.fr>
+Date: Tue, 21 Aug 2018 08:28:25 +0200
+Subject: [PATCH 22/35] Drop unecessary writes to DOS_SW_RESET0
+
+Also merge the VDEC_1 IRQ enable reg writes.
+---
+ drivers/media/platform/meson/vdec/codec_h264.c   | 14 --------------
+ drivers/media/platform/meson/vdec/codec_mjpeg.c  |  5 -----
+ drivers/media/platform/meson/vdec/codec_mpeg12.c |  5 -----
+ drivers/media/platform/meson/vdec/codec_mpeg4.c  |  6 ------
+ drivers/media/platform/meson/vdec/vdec_1.c       |  4 ++++
+ 5 files changed, 4 insertions(+), 30 deletions(-)
+
+diff --git a/drivers/media/platform/meson/vdec/codec_h264.c b/drivers/media/platform/meson/vdec/codec_h264.c
+index 7b9b163..d8e5299 100644
+--- a/drivers/media/platform/meson/vdec/codec_h264.c
++++ b/drivers/media/platform/meson/vdec/codec_h264.c
+@@ -89,16 +89,6 @@ static int codec_h264_start(struct amvdec_session *sess) {
+ 	while (amvdec_read_dos(core, DCAC_DMA_CTRL) & 0x8000) { }
+ 	while (amvdec_read_dos(core, LMEM_DMA_CTRL) & 0x8000) { }
+ 
+-	amvdec_write_dos(core, DOS_SW_RESET0, (1<<7) | (1<<6) | (1<<4));
+-	amvdec_write_dos(core, DOS_SW_RESET0, 0);
+-	amvdec_read_dos(core, DOS_SW_RESET0);
+-
+-	amvdec_write_dos(core, DOS_SW_RESET0, (1<<7) | (1<<6) | (1<<4));
+-	amvdec_write_dos(core, DOS_SW_RESET0, 0);
+-	amvdec_write_dos(core, DOS_SW_RESET0, (1<<9) | (1<<8));
+-	amvdec_write_dos(core, DOS_SW_RESET0, 0);
+-	amvdec_read_dos(core, DOS_SW_RESET0);
+-
+ 	amvdec_write_dos(core, POWER_CTL_VLD, amvdec_read_dos(core, POWER_CTL_VLD) | (1 << 9) | (1 << 6));
+ 
+ 	amvdec_write_dos(core, PSCALE_CTRL, 0);
+@@ -116,10 +106,6 @@ static int codec_h264_start(struct amvdec_session *sess) {
+ 	/* Enable "error correction", don't know what it means */
+ 	amvdec_write_dos(core, AV_SCRATCH_F, (amvdec_read_dos(core, AV_SCRATCH_F) & 0xffffffc3) | (1 << 4) | (1 << 7));
+ 
+-	/* Enable IRQ */
+-	amvdec_write_dos(core, ASSIST_MBOX1_CLR_REG, 1);
+-	amvdec_write_dos(core, ASSIST_MBOX1_MASK, 1);
+-
+ 	amvdec_write_dos(core, MDEC_PIC_DC_THRESH, 0x404038aa);
+ 	
+ 	amvdec_write_dos(core, DOS_SW_RESET0, (1<<12)|(1<<11));
+diff --git a/drivers/media/platform/meson/vdec/codec_mjpeg.c b/drivers/media/platform/meson/vdec/codec_mjpeg.c
+index 81fab24..f79b288 100644
+--- a/drivers/media/platform/meson/vdec/codec_mjpeg.c
++++ b/drivers/media/platform/meson/vdec/codec_mjpeg.c
+@@ -88,9 +88,6 @@ static int codec_mjpeg_start(struct amvdec_session *sess)
+ {
+ 	struct amvdec_core *core = sess->core;
+ 
+-	amvdec_write_dos(core, DOS_SW_RESET0, (1 << 7) | (1 << 6));
+-	amvdec_write_dos(core, DOS_SW_RESET0, 0);
+-
+ 	amvdec_write_dos(core, AV_SCRATCH_0, 12);
+ 	amvdec_write_dos(core, AV_SCRATCH_1, 0x031a);
+ 
+@@ -101,8 +98,6 @@ static int codec_mjpeg_start(struct amvdec_session *sess)
+ 	amvdec_write_dos(core, MREG_FROM_AMRISC, 0);
+ 	amvdec_write_dos(core, MCPU_INTR_MSK, 0xffff);
+ 	amvdec_write_dos(core, MREG_DECODE_PARAM, (sess->height << 4) | 0x8000);
+-	amvdec_write_dos(core, ASSIST_MBOX1_CLR_REG, 1);
+-	amvdec_write_dos(core, ASSIST_MBOX1_MASK, 1);
+ 	amvdec_write_dos(core, VDEC_ASSIST_AMR1_INT8, 8);
+ 
+ 	/* Intra-only codec */
+diff --git a/drivers/media/platform/meson/vdec/codec_mpeg12.c b/drivers/media/platform/meson/vdec/codec_mpeg12.c
+index 9ba998e..28229f4 100644
+--- a/drivers/media/platform/meson/vdec/codec_mpeg12.c
++++ b/drivers/media/platform/meson/vdec/codec_mpeg12.c
+@@ -62,10 +62,6 @@ static int codec_mpeg12_start(struct amvdec_session *sess) {
+ 		goto free_mpeg12;
+ 	}
+ 
+-	amvdec_write_dos(core, DOS_SW_RESET0, (1<<9) | (1<<8) | (1<<7) | (1<<6) | (1<<4));
+-	amvdec_write_dos(core, DOS_SW_RESET0, 0);
+-	amvdec_read_dos(core, DOS_SW_RESET0);
+-
+ 	amvdec_write_dos(core, POWER_CTL_VLD, (1 << 4));
+ 
+ 	amcodec_helper_set_canvases(sess, core->dos_base + AV_SCRATCH_0);
+@@ -75,7 +71,6 @@ static int codec_mpeg12_start(struct amvdec_session *sess) {
+ 	amvdec_write_dos(core, PSCALE_CTRL, 0);
+ 	amvdec_write_dos(core, PIC_HEAD_INFO, 0x380);
+ 	amvdec_write_dos(core, M4_CONTROL_REG, 0);
+-	amvdec_write_dos(core, ASSIST_MBOX1_CLR_REG, 1);
+ 	amvdec_write_dos(core, MREG_BUFFERIN, 0);
+ 	amvdec_write_dos(core, MREG_BUFFEROUT, 0);
+ 	amvdec_write_dos(core, MREG_CMD, (sess->width << 16) | sess->height);
+diff --git a/drivers/media/platform/meson/vdec/codec_mpeg4.c b/drivers/media/platform/meson/vdec/codec_mpeg4.c
+index 10a03b9..ca9440a 100644
+--- a/drivers/media/platform/meson/vdec/codec_mpeg4.c
++++ b/drivers/media/platform/meson/vdec/codec_mpeg4.c
+@@ -101,10 +101,6 @@ static int codec_mpeg4_start(struct amvdec_session *sess) {
+ 		goto free_mpeg4;
+ 	}
+ 
+-	amvdec_write_dos(core, DOS_SW_RESET0, (1<<7) | (1<<6));
+-	amvdec_write_dos(core, DOS_SW_RESET0, 0);
+-	amvdec_read_dos(core, DOS_SW_RESET0);
+-
+ 	codec_mpeg4_set_canvases(sess);
+ 
+ 	amvdec_write_dos(core, MEM_OFFSET_REG, mpeg4->workspace_paddr - DCAC_BUFF_START_IP);
+@@ -113,8 +109,6 @@ static int codec_mpeg4_start(struct amvdec_session *sess) {
+ 	amvdec_write_dos(core, MREG_BUFFERIN, 0);
+ 	amvdec_write_dos(core, MREG_BUFFEROUT, 0);
+ 	amvdec_write_dos(core, MREG_FATAL_ERROR, 0);
+-	amvdec_write_dos(core, ASSIST_MBOX1_CLR_REG, 1);
+-	amvdec_write_dos(core, ASSIST_MBOX1_MASK, 1);
+ 	amvdec_write_dos(core, MDEC_PIC_DC_THRESH, 0x404038aa);
+ 
+ 	return 0;
+diff --git a/drivers/media/platform/meson/vdec/vdec_1.c b/drivers/media/platform/meson/vdec/vdec_1.c
+index 6b7800f..f4f4e479 100644
+--- a/drivers/media/platform/meson/vdec/vdec_1.c
++++ b/drivers/media/platform/meson/vdec/vdec_1.c
+@@ -176,6 +176,10 @@ static int vdec_1_start(struct amvdec_session *sess)
+ 
+ 	codec_ops->start(sess);
+ 
++	/* Enable IRQ */
++	amvdec_write_dos(core, ASSIST_MBOX1_CLR_REG, 1);
++	amvdec_write_dos(core, ASSIST_MBOX1_MASK, 1);
++
+ 	/* Enable 2-plane output */
+ 	if (sess->pixfmt_cap == V4L2_PIX_FMT_NV12M)
+ 		amvdec_write_dos(core, MDEC_PIC_DC_CTRL, amvdec_read_dos(core, MDEC_PIC_DC_CTRL) | (1 << 17));
+-- 
+2.7.4
+

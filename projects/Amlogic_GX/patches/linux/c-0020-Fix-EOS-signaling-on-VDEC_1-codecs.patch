@@ -1,0 +1,60 @@
+From 3d39e3ee8c0031dbd13808925870aec67341c1a8 Mon Sep 17 00:00:00 2001
+From: Maxime Jourdan <maxi.jourdan@wanadoo.fr>
+Date: Mon, 20 Aug 2018 16:23:54 +0200
+Subject: [PATCH 20/35] Fix EOS signaling on VDEC_1 codecs
+
+The decoder will refuse to drain unless there is one spare output
+buffer.
+
+Also, don't keep the session lock while waiting for the decoder to
+finish.
+---
+ drivers/media/platform/meson/vdec/esparser.c | 4 ++--
+ drivers/media/platform/meson/vdec/vdec.c     | 3 ++-
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/media/platform/meson/vdec/esparser.c b/drivers/media/platform/meson/vdec/esparser.c
+index 8639e2a..da718ed 100644
+--- a/drivers/media/platform/meson/vdec/esparser.c
++++ b/drivers/media/platform/meson/vdec/esparser.c
+@@ -214,12 +214,12 @@ static int esparser_queue(struct amvdec_session *sess, struct vb2_v4l2_buffer *v
+ 	}
+ 
+ 	if (codec_ops->num_pending_bufs)
+-		num_dst_bufs = codec_ops->num_pending_bufs(sess);
++		num_dst_bufs = codec_ops->num_pending_bufs(sess) + 1;
+ 
+ 	num_dst_bufs += v4l2_m2m_num_dst_bufs_ready(sess->m2m_ctx);
+ 
+ 	if (esparser_vififo_get_free_space(sess) < payload_size ||
+-	    atomic_read(&sess->esparser_queued_bufs) >= num_dst_bufs)
++	    atomic_read(&sess->esparser_queued_bufs) >= (num_dst_bufs - 1))
+ 		return -EAGAIN;
+ 
+ 	v4l2_m2m_src_buf_remove_by_buf(sess->m2m_ctx, vbuf);
+diff --git a/drivers/media/platform/meson/vdec/vdec.c b/drivers/media/platform/meson/vdec/vdec.c
+index 444a3a5..dc8f8e2 100644
+--- a/drivers/media/platform/meson/vdec/vdec.c
++++ b/drivers/media/platform/meson/vdec/vdec.c
+@@ -594,9 +594,9 @@ vdec_decoder_cmd(struct file *file, void *fh, struct v4l2_decoder_cmd *cmd)
+ 		return ret;
+ 
+ 	mutex_lock(&sess->lock);
+-
+ 	if (!(sess->streamon_out & sess->streamon_cap))
+ 		goto unlock;
++	mutex_unlock(&sess->lock);
+ 
+ 	dev_dbg(sess->core->dev, "Received V4L2_DEC_CMD_STOP\n");
+ 	sess->should_stop = 1;
+@@ -611,6 +611,7 @@ vdec_decoder_cmd(struct file *file, void *fh, struct v4l2_decoder_cmd *cmd)
+ 	       sess->last_irq_jiffies + msecs_to_jiffies(100)))
+ 		msleep(100);
+ 
++	mutex_lock(&sess->lock);
+ 	if (codec_ops->drain)
+ 		codec_ops->drain(sess);
+ 	else
+-- 
+2.7.4
+

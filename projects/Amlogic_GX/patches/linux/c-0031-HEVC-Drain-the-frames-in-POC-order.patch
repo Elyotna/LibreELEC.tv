@@ -1,0 +1,31 @@
+From b900fe995f7643cb2082392f5a12d1693f1ea093 Mon Sep 17 00:00:00 2001
+From: Maxime Jourdan <mjourdan@baylibre.com>
+Date: Fri, 24 Aug 2018 17:21:54 +0200
+Subject: [PATCH 31/35] HEVC: Drain the frames in POC order
+
+Instead of giving back the frames in bitstream order,
+give them back in picture order count to be in display order.
+---
+ drivers/media/platform/meson/vdec/codec_hevc.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/media/platform/meson/vdec/codec_hevc.c b/drivers/media/platform/meson/vdec/codec_hevc.c
+index 556ec35..6b6da95 100644
+--- a/drivers/media/platform/meson/vdec/codec_hevc.c
++++ b/drivers/media/platform/meson/vdec/codec_hevc.c
+@@ -815,9 +815,10 @@ static int codec_hevc_start(struct amvdec_session *sess)
+ static void codec_hevc_flush_output(struct amvdec_session *sess)
+ {
+ 	struct codec_hevc *hevc = sess->priv;
+-	struct hevc_frame *tmp, *n;
++	struct hevc_frame *tmp;
+ 
+-	list_for_each_entry_safe(tmp, n, &hevc->ref_frames_list, list) {
++	while (!list_empty(&hevc->ref_frames_list)) {
++		tmp = codec_hevc_get_lowest_poc_frame(hevc);
+ 		amvdec_dst_buf_done(sess, tmp->vbuf, V4L2_FIELD_NONE);
+ 		list_del(&tmp->list);
+ 		kfree(tmp);
+-- 
+2.7.4
+
