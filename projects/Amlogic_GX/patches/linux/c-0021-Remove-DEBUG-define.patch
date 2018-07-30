@@ -1,0 +1,25 @@
+From a3163c46348092b2a964e9f3170aa7631e2a3302 Mon Sep 17 00:00:00 2001
+From: Maxime Jourdan <maxi.jourdan@wanadoo.fr>
+Date: Mon, 20 Aug 2018 19:36:03 +0200
+Subject: [PATCH 21/30] Remove DEBUG define
+
+---
+ drivers/media/platform/meson/vdec/vdec.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/drivers/media/platform/meson/vdec/vdec.c b/drivers/media/platform/meson/vdec/vdec.c
+index dc8f8e2..1a048fe 100644
+--- a/drivers/media/platform/meson/vdec/vdec.c
++++ b/drivers/media/platform/meson/vdec/vdec.c
+@@ -3,8 +3,6 @@
+  * Copyright (C) 2018 Maxime Jourdan <maxi.jourdan@wanadoo.fr>
+  */
+ 
+-#define DEBUG
+-
+ #include <linux/of_device.h>
+ #include <linux/clk.h>
+ #include <linux/io.h>
+-- 
+2.7.4
+

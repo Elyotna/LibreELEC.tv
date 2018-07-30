@@ -1,0 +1,110 @@
+From 17c3cff3cca731135b5810b5fc2d03247c285c9c Mon Sep 17 00:00:00 2001
+From: Maxime Jourdan <maxi.jourdan@wanadoo.fr>
+Date: Sun, 19 Aug 2018 15:46:04 +0200
+Subject: [PATCH 16/30] Implement drain for HEVC
+
+The HEVC decoder doesn't react to the EOS packet we send to the
+esparser for other codecs.
+
+So implement a custom way of draining.
+---
+ drivers/media/platform/meson/vdec/codec_h264.c |  1 -
+ drivers/media/platform/meson/vdec/codec_hevc.c | 14 ++++++++++++++
+ drivers/media/platform/meson/vdec/vdec.c       | 10 +++++++---
+ drivers/media/platform/meson/vdec/vdec.h       |  1 +
+ 4 files changed, 22 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/media/platform/meson/vdec/codec_h264.c b/drivers/media/platform/meson/vdec/codec_h264.c
+index 24deb43..764b33b 100644
+--- a/drivers/media/platform/meson/vdec/codec_h264.c
++++ b/drivers/media/platform/meson/vdec/codec_h264.c
+@@ -269,7 +269,6 @@ static void codec_h264_frames_ready(struct vdec_session *sess, u32 status)
+ 			dev_info(core->dev, "Buffer %d decode error\n",
+ 				 buffer_index);
+ 
+-		//printk("done %d/%d: %d\n", i, num_frames, buffer_index);
+ 		vdec_dst_buf_done_idx(sess, buffer_index);
+ 	}
+ }
+diff --git a/drivers/media/platform/meson/vdec/codec_hevc.c b/drivers/media/platform/meson/vdec/codec_hevc.c
+index 09fe106..6bd03df 100644
+--- a/drivers/media/platform/meson/vdec/codec_hevc.c
++++ b/drivers/media/platform/meson/vdec/codec_hevc.c
+@@ -486,6 +486,19 @@ static struct hevc_frame *codec_hevc_get_lowest_poc_frame(struct codec_hevc *hev
+ 	return ret;
+ }
+ 
++static void codec_hevc_drain(struct vdec_session *sess)
++{
++	struct hevc_frame *tmp;
++	struct codec_hevc *hevc = sess->priv;
++
++	while ((tmp = codec_hevc_get_lowest_poc_frame(hevc))) {
++		vdec_dst_buf_done(sess, tmp->vbuf);
++		list_del(&tmp->list);
++		kfree(tmp);
++		hevc->frames_num--;
++	}
++}
++
+ /* Try to output as many frames as possible */
+ static void codec_hevc_output_frames(struct vdec_session *sess)
+ {
+@@ -1404,4 +1417,5 @@ struct vdec_codec_ops codec_hevc_ops = {
+ 	.isr = codec_hevc_isr,
+ 	.threaded_isr = codec_hevc_threaded_isr,
+ 	.num_pending_bufs = codec_hevc_num_pending_bufs,
++	.drain = codec_hevc_drain,
+ };
+\ No newline at end of file
+diff --git a/drivers/media/platform/meson/vdec/vdec.c b/drivers/media/platform/meson/vdec/vdec.c
+index c9ac200..c91ef02 100644
+--- a/drivers/media/platform/meson/vdec/vdec.c
++++ b/drivers/media/platform/meson/vdec/vdec.c
+@@ -312,7 +312,7 @@ static int
+ vdec_querycap(struct file *file, void *fh, struct v4l2_capability *cap)
+ {
+ 	strlcpy(cap->driver, "meson-vdec", sizeof(cap->driver));
+-	strlcpy(cap->card, "AMLogic Video Decoder", sizeof(cap->card));
++	strlcpy(cap->card, "Amlogic Video Decoder", sizeof(cap->card));
+ 	strlcpy(cap->bus_info, "platform:meson-vdec", sizeof(cap->bus_info));
+ 
+ 	return 0;
+@@ -586,6 +586,7 @@ vdec_decoder_cmd(struct file *file, void *fh, struct v4l2_decoder_cmd *cmd)
+ {
+ 	struct vdec_session *sess =
+ 		container_of(file->private_data, struct vdec_session, fh);
++	struct vdec_codec_ops *codec_ops = sess->fmt_out->codec_ops;
+ 	int ret;
+ 
+ 	ret = vdec_try_decoder_cmd(file, fh, cmd);
+@@ -608,9 +609,12 @@ vdec_decoder_cmd(struct file *file, void *fh, struct v4l2_decoder_cmd *cmd)
+ 	 */
+ 	while (time_is_after_jiffies64(
+ 	       sess->last_irq_jiffies + msecs_to_jiffies(100)))
+-		msleep(20);
++		msleep(100);
+ 
+-	esparser_queue_eos(sess);
++	if (codec_ops->drain)
++		codec_ops->drain(sess);
++	else
++		esparser_queue_eos(sess);
+ 
+ unlock:
+ 	mutex_unlock(&sess->lock);
+diff --git a/drivers/media/platform/meson/vdec/vdec.h b/drivers/media/platform/meson/vdec/vdec.h
+index e1595f7..a0a237b 100644
+--- a/drivers/media/platform/meson/vdec/vdec.h
++++ b/drivers/media/platform/meson/vdec/vdec.h
+@@ -74,6 +74,7 @@ struct vdec_codec_ops {
+ 	int (*can_recycle)(struct vdec_core *core);
+ 	void (*recycle)(struct vdec_core *core, u32 buf_idx);
+ 	void (*notify_dst_buffer)(struct vdec_session *sess, struct vb2_buffer *vb);
++	void (*drain)(struct vdec_session *sess);
+ 	irqreturn_t (*isr)(struct vdec_session *sess);
+ 	irqreturn_t (*threaded_isr)(struct vdec_session *sess);
+ };
+-- 
+2.7.4
+

@@ -1,0 +1,51 @@
+From 4509afb775edd669ce47ab6d90368a44c305b5d9 Mon Sep 17 00:00:00 2001
+From: Maxime Jourdan <maxi.jourdan@wanadoo.fr>
+Date: Sun, 19 Aug 2018 13:40:10 +0200
+Subject: [PATCH 15/30] drop the esparser sleep
+
+Turns out the bug was in userspace, the esparser can handle
+a big flow of data with no problem.
+---
+ drivers/media/platform/meson/vdec/esparser.c | 6 ------
+ drivers/media/platform/meson/vdec/vdec.c     | 2 +-
+ 2 files changed, 1 insertion(+), 7 deletions(-)
+
+diff --git a/drivers/media/platform/meson/vdec/esparser.c b/drivers/media/platform/meson/vdec/esparser.c
+index 45a140c..002c720 100644
+--- a/drivers/media/platform/meson/vdec/esparser.c
++++ b/drivers/media/platform/meson/vdec/esparser.c
+@@ -227,12 +227,6 @@ static int esparser_queue(struct vdec_session *sess, struct vb2_v4l2_buffer *vbu
+ 	dev_dbg(core->dev, "esparser: Queuing ts = %llu ; pld_size = %u\n",
+ 		vb->timestamp, payload_size);
+ 
+-	/* Queuing things too fast can unfortunately lead to HW lock
+-	 * or buffer decoding errors, as it looks like the ESPARSER
+-	 * gets confused with too much data thrown in too quickly.
+-	 */
+-	usleep_range(5000, 10000);
+-
+ 	pad_size = esparser_pad_start_code(vb);
+ 	ret = esparser_write_data(core, phy, payload_size + pad_size);
+ 
+diff --git a/drivers/media/platform/meson/vdec/vdec.c b/drivers/media/platform/meson/vdec/vdec.c
+index 2d75dc4..c9ac200 100644
+--- a/drivers/media/platform/meson/vdec/vdec.c
++++ b/drivers/media/platform/meson/vdec/vdec.c
+@@ -235,13 +235,13 @@ static int vdec_start_streaming(struct vb2_queue *q, unsigned int count)
+ 	}
+ 
+ 	sess->should_stop = 0;
++	sess->keyframe_found = 0;
+ 	ret = vdec_poweron(sess);
+ 	if (ret)
+ 		goto vififo_free;
+ 
+ 	sess->sequence_cap = 0;
+ 	sess->num_recycle = 0;
+-	sess->keyframe_found = 0;
+ 	if (vdec_codec_needs_recycle(sess))
+ 		sess->recycle_thread = kthread_run(vdec_recycle_thread, sess,
+ 						   "vdec_recycle");
+-- 
+2.7.4
+
