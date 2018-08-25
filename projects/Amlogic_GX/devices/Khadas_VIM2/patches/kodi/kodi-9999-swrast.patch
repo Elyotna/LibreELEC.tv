@@ -1,0 +1,28 @@
+--- a/xbmc/windowing/gbm/DRMUtils.cpp   2018-08-24 10:34:08.964198447 +0100
++++ b/xbmc/windowing/gbm/DRMUtils.cpp   2018-08-24 11:49:35.796691976 +0100
+@@ -479,18 +479,19 @@ bool CDRMUtils::OpenDrm(bool needConnect
+ {
+   static constexpr const char *modules[] =
+   {
+-    "i915",
+     "amdgpu",
+-    "radeon",
+-    "nouveau",
+-    "vmwgfx",
+-    "msm",
+     "imx-drm",
++    "i915",
++    "meson"
++    "msm",
++    "nouveau",
++    "radeon",
+     "rockchip",
++    "sun4i-drm",
++    "swrast"
+     "vc4",
+     "virtio_gpu",
+-    "sun4i-drm",
+-    "meson"
++    "vmwgfx",
+   };
+    for(int i = 0; i < 10; ++i)
