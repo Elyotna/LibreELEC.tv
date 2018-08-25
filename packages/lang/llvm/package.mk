@@ -5,7 +5,7 @@
 PKG_NAME="llvm"
 PKG_VERSION="6.0.0"
 PKG_SHA256="1ff53c915b4e761ef400b803f07261ade637b0c269d99569f18040f3dcee4408"
-PKG_ARCH="x86_64"
+PKG_ARCH="any"
 PKG_LICENSE="GPL"
 PKG_SITE="http://llvm.org/"
 PKG_URL="http://llvm.org/releases/$PKG_VERSION/${PKG_NAME}-${PKG_VERSION}.src.tar.xz"
@@ -15,6 +15,12 @@ PKG_DEPENDS_TARGET="toolchain llvm:host zlib"
 PKG_SECTION="lang"
 PKG_SHORTDESC="llvm: Low Level Virtual Machine"
 PKG_LONGDESC="Low-Level Virtual Machine (LLVM) is a compiler infrastructure designed for compile-time, link-time, run-time, and idle-time optimization of programs from arbitrary programming languages. It currently supports compilation of C, Objective-C, and C++ programs, using front-ends derived from GCC 4.0, GCC 4.2, and a custom new front-end, "clang". It supports x86, x86-64, ia64, PowerPC, and SPARC, with support for Alpha and ARM under development."
+
+if [ "$ARCH" = "arm" -o "$ARCH" = "aarch64" ]; then
+  LLVM_TARGETS="ARM"
+else
+  LLVM_TARGETS="AMDGPU"
+fi
 
 PKG_CMAKE_OPTS_COMMON="-DLLVM_INCLUDE_TOOLS=ON \
                        -DLLVM_BUILD_TOOLS=OFF \
@@ -28,7 +34,7 @@ PKG_CMAKE_OPTS_COMMON="-DLLVM_INCLUDE_TOOLS=ON \
                        -DLLVM_INCLUDE_DOCS=OFF \
                        -DLLVM_ENABLE_DOXYGEN=OFF \
                        -DLLVM_ENABLE_SPHINX=OFF \
-                       -DLLVM_TARGETS_TO_BUILD="AMDGPU" \
+                       -DLLVM_TARGETS_TO_BUILD=$LLVM_TARGETS \
                        -DLLVM_ENABLE_TERMINFO=OFF \
                        -DLLVM_ENABLE_ASSERTIONS=OFF \
                        -DLLVM_ENABLE_WERROR=OFF \
